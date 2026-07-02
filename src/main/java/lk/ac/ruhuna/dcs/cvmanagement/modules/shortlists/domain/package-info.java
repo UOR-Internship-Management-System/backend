@@ -1,0 +1,1 @@
+package lk.ac.ruhuna.dcs.cvmanagement.modules.shortlists.domain;

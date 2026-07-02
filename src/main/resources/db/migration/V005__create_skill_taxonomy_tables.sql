@@ -1,0 +1,1 @@
+-- TODO: Implement migration for V005__create_skill_taxonomy_tables.sql

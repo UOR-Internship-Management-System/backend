@@ -1,0 +1,1 @@
+-- TODO: Implement migration for V006__create_declared_skill_tables.sql
