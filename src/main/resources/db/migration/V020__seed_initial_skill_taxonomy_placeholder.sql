@@ -1,0 +1,1 @@
+-- TODO: Implement migration for V020__seed_initial_skill_taxonomy_placeholder.sql
