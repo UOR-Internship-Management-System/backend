@@ -1,5 +1,10 @@
 package lk.ac.ruhuna.dcs.cvmanagement.shared.error;
 
-public class ConflictException {
-    // TODO: Implement in the appropriate sprint.
+import org.springframework.http.HttpStatus;
+
+public class ConflictException extends ApplicationException {
+
+    public ConflictException(String message) {
+        super(ApiErrorCode.CONFLICT, HttpStatus.CONFLICT, message);
+    }
 }
