@@ -1,2 +1,4 @@
-#!/bin/bash
-# TODO: Implement dev-stop.sh
+#!/usr/bin/env sh
+set -eu
+
+docker compose -f docker/docker-compose.dev.yml down
