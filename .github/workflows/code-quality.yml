@@ -1,0 +1,40 @@
+name: Code Quality
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - feature/**
+      - codex/**
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    name: Static backend validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Compile application and tests
+        run: ./mvnw -B -DskipTests test-compile
+
+      - name: Verify workflow placeholders are removed
+        shell: bash
+        run: |
+          if grep -R "^[[:space:]]*# TODO: Configure" .github/workflows; then
+            echo "Workflow placeholder content must be replaced before merging."
+            exit 1
+          fi

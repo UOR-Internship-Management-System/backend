@@ -1,0 +1,35 @@
+name: Dependency Check
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - feature/**
+      - codex/**
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  maven-dependencies:
+    name: Validate Maven dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Resolve dependencies
+        run: ./mvnw -B -DskipTests dependency:resolve
+
+      - name: Report dependency tree
+        run: ./mvnw -B -DskipTests dependency:tree

@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cv-management-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${CV_DB_NAME:-cv_management}
+      POSTGRES_USER: ${CV_DB_USERNAME:-cv_user}
+      POSTGRES_PASSWORD: ${CV_DB_PASSWORD:-cv_local_password}
+    ports:
+      - "${CV_DB_PORT:-5432}:5432"
+    volumes:
+      - cv_management_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - cv-management-dev
+
+volumes:
+  cv_management_postgres_data:
+
+networks:
+  cv-management-dev:
+    driver: bridge
