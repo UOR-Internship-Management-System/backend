@@ -1,0 +1,5530 @@
+openapi: 3.1.1
+info:
+  title: CV Management and Deterministic Internship Candidate Filtering API
+  version: 1.0.0
+  description: REST/JSON API contract for the locked Version 1 scope.
+servers:
+- url: /api/v1
+security:
+- bearerAuth: []
+tags:
+- name: Authentication
+- name: Student Verification and OTP
+- name: Student Profile
+- name: Declared Skills and Taxonomy
+- name: Project Portfolio
+- name: Academic Records
+- name: CV Generation and Versioning
+- name: Admin Dashboard
+- name: Academic Ledger
+- name: Registered Students
+- name: Company Metadata
+- name: Internship Requests
+- name: Candidate Filtering
+- name: Shortlists
+- name: Exports
+- name: Audit/System Events
+paths:
+  /auth/student/login:
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate a Student using university email and password.
+      operationId: postAuthStudentLogin
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. No company login or admin approval path.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentLoginRequest'
+  /auth/admin/login:
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate a predefined Department Admin.
+      operationId: postAuthAdminLogin
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. Predefined Admin only; no Admin self-registration.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+  /auth/logout:
+    post:
+      tags:
+      - Authentication
+      summary: Invalidate or rotate the current authenticated session/token context where supported.
+      operationId: postAuthLogout
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student/Admin. Audit: Security. Token persistence details remain backend-controlled.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+  /auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Return current authenticated user context and role claims.
+      operationId: getAuthMe
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student/Admin. Audit: Security. Frontend route guards cannot replace backend authorization.'
+  /student-verifications:
+    post:
+      tags:
+      - Student Verification and OTP
+      summary: Start Student sign-up auto-verification using full name, index number and university email.
+      operationId: postStudentVerifications
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentVerificationResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. Full name is display data only; index number and university email are
+        verification authority.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentVerificationStartRequest'
+  /student-verifications/{verificationId}/otp/verify:
+    post:
+      tags:
+      - Student Verification and OTP
+      summary: Verify the OTP issued after successful student auto-verification.
+      operationId: postStudentVerificationsByVerificationIdOtpVerify
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpVerifyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. Raw OTP is never returned or logged.'
+      security: []
+      parameters:
+      - name: verificationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: verificationId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+  /student-verifications/{verificationId}/otp/resend:
+    post:
+      tags:
+      - Student Verification and OTP
+      summary: Resend a valid OTP after expiry or non-delivery subject to rate limits.
+      operationId: postStudentVerificationsByVerificationIdOtpResend
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpResendResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. Must enforce anti-abuse limits.'
+      security: []
+      parameters:
+      - name: verificationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: verificationId identifier.
+  /student-verifications/{verificationId}/password:
+    post:
+      tags:
+      - Student Verification and OTP
+      summary: Create initial Student password after OTP verification.
+      operationId: postStudentVerificationsByVerificationIdPassword
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. No temporary password workflow.'
+      security: []
+      parameters:
+      - name: verificationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: verificationId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordCreateRequest'
+  /password-resets:
+    post:
+      tags:
+      - Student Verification and OTP
+      summary: Start forgot-password flow for a Student university email.
+      operationId: postPasswordResets
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. Uses OTP, not temporary password.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetStartRequest'
+  /password-resets/{resetId}/otp/verify:
+    post:
+      tags:
+      - Student Verification and OTP
+      summary: Verify password reset OTP.
+      operationId: postPasswordResetsByResetIdOtpVerify
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OtpVerifyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. Failure states include invalid, expired and rate-limited OTP.'
+      security: []
+      parameters:
+      - name: resetId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: resetId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OtpVerifyRequest'
+  /password-resets/{resetId}/password:
+    post:
+      tags:
+      - Student Verification and OTP
+      summary: Set a new password after reset OTP verification.
+      operationId: postPasswordResetsByResetIdPassword
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Public. Audit: Security. Password hash update only; no password returned.'
+      security: []
+      parameters:
+      - name: resetId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: resetId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordCreateRequest'
+  /me/profile:
+    get:
+      tags:
+      - Student Profile
+      summary: Retrieve the authenticated Student profile and immutable identity fields.
+      operationId: getMeProfile
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentProfileResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Only own profile data.'
+    patch:
+      tags:
+      - Student Profile
+      summary: Update editable profile fields and CV-supporting profile summary.
+      operationId: patchMeProfile
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudentProfileResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Index number and university email are immutable.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentProfileUpdateRequest'
+  /me/profile/contact-links:
+    get:
+      tags:
+      - Student Profile
+      summary: List own Student contact link records used by profile and CV generation.
+      operationId: getMeProfileContactLinks
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedContactLinkResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Own records only.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Student Profile
+      summary: Create an own Student contact link record.
+      operationId: postMeProfileContactLinks
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactLinkResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Own records only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactLinkRequest'
+  /me/profile/contact-links/{contactLinkId}:
+    patch:
+      tags:
+      - Student Profile
+      summary: Update an own Student contact link record.
+      operationId: patchMeProfileContactLinksByContactLinkId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactLinkResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: contactLinkId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: contactLinkId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactLinkRequest'
+    delete:
+      tags:
+      - Student Profile
+      summary: Delete an own Student contact link record.
+      operationId: deleteMeProfileContactLinksByContactLinkId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: contactLinkId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: contactLinkId identifier.
+  /me/profile/certificates:
+    get:
+      tags:
+      - Student Profile
+      summary: List own Student certificate records used by profile and CV generation.
+      operationId: getMeProfileCertificates
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCertificateResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Own records only.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Student Profile
+      summary: Create an own Student certificate record.
+      operationId: postMeProfileCertificates
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Own records only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateRequest'
+  /me/profile/certificates/{certificateId}:
+    patch:
+      tags:
+      - Student Profile
+      summary: Update an own Student certificate record.
+      operationId: patchMeProfileCertificatesByCertificateId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: certificateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: certificateId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertificateRequest'
+    delete:
+      tags:
+      - Student Profile
+      summary: Delete an own Student certificate record.
+      operationId: deleteMeProfileCertificatesByCertificateId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: certificateId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: certificateId identifier.
+  /me/profile/awards:
+    get:
+      tags:
+      - Student Profile
+      summary: List own Student award records used by profile and CV generation.
+      operationId: getMeProfileAwards
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAwardResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Own records only.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Student Profile
+      summary: Create an own Student award record.
+      operationId: postMeProfileAwards
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AwardResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Own records only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AwardRequest'
+  /me/profile/awards/{awardId}:
+    patch:
+      tags:
+      - Student Profile
+      summary: Update an own Student award record.
+      operationId: patchMeProfileAwardsByAwardId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AwardResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: awardId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: awardId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AwardRequest'
+    delete:
+      tags:
+      - Student Profile
+      summary: Delete an own Student award record.
+      operationId: deleteMeProfileAwardsByAwardId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: awardId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: awardId identifier.
+  /me/profile/activities:
+    get:
+      tags:
+      - Student Profile
+      summary: List own Student activity records used by profile and CV generation.
+      operationId: getMeProfileActivities
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedActivityResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Own records only.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Student Profile
+      summary: Create an own Student activity record.
+      operationId: postMeProfileActivities
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Own records only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityRequest'
+  /me/profile/activities/{activityId}:
+    patch:
+      tags:
+      - Student Profile
+      summary: Update an own Student activity record.
+      operationId: patchMeProfileActivitiesByActivityId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: activityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: activityId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivityRequest'
+    delete:
+      tags:
+      - Student Profile
+      summary: Delete an own Student activity record.
+      operationId: deleteMeProfileActivitiesByActivityId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: activityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: activityId identifier.
+  /me/profile/experience:
+    get:
+      tags:
+      - Student Profile
+      summary: List own Student experience records used by profile and CV generation.
+      operationId: getMeProfileExperience
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedExperienceResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Own records only.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Student Profile
+      summary: Create an own Student experience record.
+      operationId: postMeProfileExperience
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Own records only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperienceRequest'
+  /me/profile/experience/{experienceId}:
+    patch:
+      tags:
+      - Student Profile
+      summary: Update an own Student experience record.
+      operationId: patchMeProfileExperienceByExperienceId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: experienceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: experienceId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperienceRequest'
+    delete:
+      tags:
+      - Student Profile
+      summary: Delete an own Student experience record.
+      operationId: deleteMeProfileExperienceByExperienceId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: experienceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: experienceId identifier.
+  /skill-taxonomy:
+    get:
+      tags:
+      - Declared Skills and Taxonomy
+      summary: Read developer-managed skill taxonomy tree.
+      operationId: getSkillTaxonomy
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillTaxonomyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student/Admin. Audit: No. Read-only taxonomy; no Admin CRUD.'
+  /skill-taxonomy/clusters:
+    get:
+      tags:
+      - Declared Skills and Taxonomy
+      summary: List skill clusters.
+      operationId: getSkillTaxonomyClusters
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSkillClusterResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student/Admin. Audit: No. API-provided dynamic data.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /skill-taxonomy/categories:
+    get:
+      tags:
+      - Declared Skills and Taxonomy
+      summary: List skill categories with optional cluster filters.
+      operationId: getSkillTaxonomyCategories
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSkillCategoryResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student/Admin. Audit: No. May support search/filter.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /skill-taxonomy/skills:
+    get:
+      tags:
+      - Declared Skills and Taxonomy
+      summary: List individual skills selectable by Students and Admin filtering.
+      operationId: getSkillTaxonomySkills
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedIndividualSkillResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student/Admin. Audit: No. One normalized skill may map to multiple categories.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /me/declared-skills:
+    get:
+      tags:
+      - Declared Skills and Taxonomy
+      summary: List own declared skills and competency levels.
+      operationId: getMeDeclaredSkills
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedDeclaredSkillResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Declared skills only; no verified skills.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Declared Skills and Taxonomy
+      summary: Declare a skill from the developer-managed taxonomy.
+      operationId: postMeDeclaredSkills
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeclaredSkillResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. No verification actor or verified state.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclaredSkillRequest'
+  /me/declared-skills/{declaredSkillId}:
+    patch:
+      tags:
+      - Declared Skills and Taxonomy
+      summary: Update own declared skill competency level.
+      operationId: patchMeDeclaredSkillsByDeclaredSkillId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeclaredSkillResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: declaredSkillId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: declaredSkillId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclaredSkillRequest'
+    delete:
+      tags:
+      - Declared Skills and Taxonomy
+      summary: Remove an own declared skill.
+      operationId: deleteMeDeclaredSkillsByDeclaredSkillId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: declaredSkillId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: declaredSkillId identifier.
+  /me/projects:
+    get:
+      tags:
+      - Project Portfolio
+      summary: List own portfolio projects.
+      operationId: getMeProjects
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProjectResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. No approval/verification workflow.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Project Portfolio
+      summary: Create own portfolio project.
+      operationId: postMeProjects
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Project remains Student-owned.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+  /me/projects/{projectId}:
+    get:
+      tags:
+      - Project Portfolio
+      summary: Retrieve own portfolio project.
+      operationId: getMeProjectsByProjectId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Object ownership is mandatory.'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: projectId identifier.
+    patch:
+      tags:
+      - Project Portfolio
+      summary: Update own portfolio project.
+      operationId: patchMeProjectsByProjectId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. No reviewer/approval fields.'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: projectId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+    delete:
+      tags:
+      - Project Portfolio
+      summary: Delete own portfolio project.
+      operationId: deleteMeProjectsByProjectId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Object ownership is mandatory.'
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: projectId identifier.
+  /me/academic-records:
+    get:
+      tags:
+      - Academic Records
+      summary: Read own official committed academic records.
+      operationId: getMeAcademicRecords
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAcademicRecordResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Read-only for Student.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /me/academic-records/gpa:
+    get:
+      tags:
+      - Academic Records
+      summary: Read own official Computer Science GPA summary.
+      operationId: getMeAcademicRecordsGpa
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GpaSummaryResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Derived from committed ledger only.'
+  /me/cv/source-freshness:
+    get:
+      tags:
+      - CV Generation and Versioning
+      summary: Check whether saved CV source data is current.
+      operationId: getMeCvSourceFreshness
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvFreshnessResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Freshness notice only; no review workflow.'
+  /me/cv/preview:
+    post:
+      tags:
+      - CV Generation and Versioning
+      summary: Generate a backend-controlled ATS-compliant CV preview.
+      operationId: postMeCvPreview
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvPreviewResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. No Admin review submission.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CvPreviewRequest'
+  /me/cv/versions:
+    post:
+      tags:
+      - CV Generation and Versioning
+      summary: Save current CV version as latest saved CV.
+      operationId: postMeCvVersions
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvVersionResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Transaction must maintain latest marker safely.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CvVersionCreateRequest'
+    get:
+      tags:
+      - CV Generation and Versioning
+      summary: List own saved CV versions.
+      operationId: getMeCvVersions
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCvVersionResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Own versions only.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /me/cv/versions/{cvVersionId}:
+    get:
+      tags:
+      - CV Generation and Versioning
+      summary: Retrieve own CV version metadata.
+      operationId: getMeCvVersionsByCvVersionId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvVersionResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: No. Own versions only.'
+      parameters:
+      - name: cvVersionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: cvVersionId identifier.
+  /me/cv/versions/{cvVersionId}/download:
+    get:
+      tags:
+      - CV Generation and Versioning
+      summary: Download own saved CV version PDF.
+      operationId: getMeCvVersionsByCvVersionIdDownload
+      responses:
+        '200': &id001
+          description: Binary file download.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. ATS-compliant PDF generated by backend.'
+      parameters:
+      - name: cvVersionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: cvVersionId identifier.
+  /me/cv/latest/download:
+    get:
+      tags:
+      - CV Generation and Versioning
+      summary: Download own latest saved CV PDF.
+      operationId: getMeCvLatestDownload
+      responses:
+        '200': *id001
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Student. Audit: Yes. Latest saved version only.'
+  /admin/dashboard/metrics:
+    get:
+      tags:
+      - Admin Dashboard
+      summary: Return current Admin dashboard metrics.
+      operationId: getAdminDashboardMetrics
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDashboardMetricsResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Metrics are live/persisted or computed; static wireframe values are non-authoritative.'
+  /admin/academic-ledger/uploads:
+    post:
+      tags:
+      - Academic Ledger
+      summary: Upload official academic ledger file for staging.
+      operationId: postAdminAcademicLedgerUploads
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicLedgerUploadResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Multipart upload; no direct commit until validation.'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AcademicLedgerUploadRequest'
+    get:
+      tags:
+      - Academic Ledger
+      summary: List academic ledger upload batches.
+      operationId: getAdminAcademicLedgerUploads
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAcademicLedgerUploadResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Supports search/filter/sort/pagination.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /admin/academic-ledger/uploads/{uploadId}:
+    get:
+      tags:
+      - Academic Ledger
+      summary: Retrieve ledger upload batch status.
+      operationId: getAdminAcademicLedgerUploadsByUploadId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicLedgerUploadResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Admin only.'
+      parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: uploadId identifier.
+  /admin/academic-ledger/uploads/{uploadId}/validation-results:
+    get:
+      tags:
+      - Academic Ledger
+      summary: Retrieve staging validation results for an upload batch.
+      operationId: getAdminAcademicLedgerUploadsByUploadIdValidationResults
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicLedgerValidationResultResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Does not commit records.'
+      parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: uploadId identifier.
+  /admin/academic-ledger/uploads/{uploadId}/commit:
+    post:
+      tags:
+      - Academic Ledger
+      summary: Commit a validated academic ledger upload.
+      operationId: postAdminAcademicLedgerUploadsByUploadIdCommit
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcademicLedgerCommitResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Atomic commit with rollback on failure.'
+      parameters:
+      - name: uploadId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: uploadId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcademicLedgerCommitRequest'
+  /admin/academic-records:
+    get:
+      tags:
+      - Academic Ledger
+      summary: List committed academic records for Admin inspection.
+      operationId: getAdminAcademicRecords
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAcademicRecordResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Supports server-side query behavior.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /admin/students:
+    get:
+      tags:
+      - Registered Students
+      summary: Search/filter/sort/paginate registered Students.
+      operationId: getAdminStudents
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedStudentSummaryResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Read-only inspection.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /admin/students/{studentId}:
+    get:
+      tags:
+      - Registered Students
+      summary: Retrieve read-only Student deep-dive details.
+      operationId: getAdminStudentsByStudentId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStudentDetailResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Admin cannot edit Student-owned data.'
+      parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: studentId identifier.
+  /admin/students/{studentId}/academic-records:
+    get:
+      tags:
+      - Registered Students
+      summary: Retrieve read-only Student academic records for Admin inspection.
+      operationId: getAdminStudentsByStudentIdAcademicRecords
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAcademicRecordResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Admin inspection only.'
+      parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: studentId identifier.
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /admin/students/{studentId}/declared-skills:
+    get:
+      tags:
+      - Registered Students
+      summary: Retrieve Student declared skills for inspection/filtering context.
+      operationId: getAdminStudentsByStudentIdDeclaredSkills
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedDeclaredSkillResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. No verification state.'
+      parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: studentId identifier.
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /admin/students/{studentId}/projects:
+    get:
+      tags:
+      - Registered Students
+      summary: Retrieve Student projects for read-only inspection.
+      operationId: getAdminStudentsByStudentIdProjects
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProjectResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. No project approval.'
+      parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: studentId identifier.
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+  /admin/students/{studentId}/latest-cv:
+    get:
+      tags:
+      - Registered Students
+      summary: Retrieve latest saved CV metadata for a Student.
+      operationId: getAdminStudentsByStudentIdLatestCv
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CvVersionResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. No CV review queue.'
+      parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: studentId identifier.
+  /admin/students/{studentId}/latest-cv/download:
+    get:
+      tags:
+      - Registered Students
+      summary: Download latest saved Student CV PDF.
+      operationId: getAdminStudentsByStudentIdLatestCvDownload
+      responses:
+        '200': *id001
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Read/download only; no approval.'
+      parameters:
+      - name: studentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: studentId identifier.
+  /admin/companies:
+    get:
+      tags:
+      - Company Metadata
+      summary: List company metadata records.
+      operationId: getAdminCompanies
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCompanyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Companies have no login or direct API role.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Company Metadata
+      summary: Create company metadata record.
+      operationId: postAdminCompanies
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Metadata only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRequest'
+  /admin/companies/{companyId}:
+    get:
+      tags:
+      - Company Metadata
+      summary: Retrieve company metadata record.
+      operationId: getAdminCompaniesByCompanyId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Metadata only.'
+      parameters:
+      - name: companyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: companyId identifier.
+    patch:
+      tags:
+      - Company Metadata
+      summary: Update company metadata record.
+      operationId: patchAdminCompaniesByCompanyId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. No company user account fields.'
+      parameters:
+      - name: companyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: companyId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRequest'
+    delete:
+      tags:
+      - Company Metadata
+      summary: Delete or deactivate company metadata record according to retention rules.
+      operationId: deleteAdminCompaniesByCompanyId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. No company authentication impact.'
+      parameters:
+      - name: companyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: companyId identifier.
+  /admin/internship-requests:
+    get:
+      tags:
+      - Internship Requests
+      summary: List internship requests.
+      operationId: getAdminInternshipRequests
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedInternshipRequestResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. No GPA request criteria.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Internship Requests
+      summary: Create internship request metadata and skill requirements.
+      operationId: postAdminInternshipRequests
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternshipRequestResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Do not accept GPA fields.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternshipRequestCreateRequest'
+  /admin/internship-requests/{requestId}:
+    get:
+      tags:
+      - Internship Requests
+      summary: Retrieve internship request.
+      operationId: getAdminInternshipRequestsByRequestId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternshipRequestResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. No GPA request criteria.'
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: requestId identifier.
+    patch:
+      tags:
+      - Internship Requests
+      summary: Update internship request metadata.
+      operationId: patchAdminInternshipRequestsByRequestId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternshipRequestResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Do not accept GPA fields.'
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: requestId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternshipRequestUpdateRequest'
+    delete:
+      tags:
+      - Internship Requests
+      summary: Delete or close internship request according to lifecycle rules.
+      operationId: deleteAdminInternshipRequestsByRequestId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Cannot affect candidate automation.'
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: requestId identifier.
+  /admin/internship-requests/{requestId}/required-skills:
+    get:
+      tags:
+      - Internship Requests
+      summary: List required skills for an internship request.
+      operationId: getAdminInternshipRequestsByRequestIdRequiredSkills
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedInternshipRequiredSkillResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Declared-skill filtering input only.'
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: requestId identifier.
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Internship Requests
+      summary: Add a required skill to an internship request.
+      operationId: postAdminInternshipRequestsByRequestIdRequiredSkills
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InternshipRequiredSkillResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Uses existing developer-managed skill taxonomy.'
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: requestId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InternshipRequiredSkillRequest'
+  /admin/internship-requests/{requestId}/required-skills/{requiredSkillId}:
+    delete:
+      tags:
+      - Internship Requests
+      summary: Remove a required skill from an internship request.
+      operationId: deleteAdminInternshipRequestsByRequestIdRequiredSkillsByRequiredSkillId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. No GPA request rule.'
+      parameters:
+      - name: requestId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: requestId identifier.
+      - name: requiredSkillId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: requiredSkillId identifier.
+  /admin/candidate-filtering/runs:
+    post:
+      tags:
+      - Candidate Filtering
+      summary: Execute deterministic runtime filtering using official GPA bounds and declared skills.
+      operationId: postAdminCandidateFilteringRuns
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateFilteringRunResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Runtime GPA filters only; no score/rank/match percentage.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CandidateFilteringRunRequest'
+  /admin/candidate-filtering/runs/{filterRunId}:
+    get:
+      tags:
+      - Candidate Filtering
+      summary: Retrieve filter run metadata and criteria.
+      operationId: getAdminCandidateFilteringRunsByFilterRunId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandidateFilteringRunResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Criteria remains deterministic.'
+      parameters:
+      - name: filterRunId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: filterRunId identifier.
+  /admin/candidate-filtering/runs/{filterRunId}/candidates:
+    get:
+      tags:
+      - Candidate Filtering
+      summary: List candidates produced by a deterministic filter run.
+      operationId: getAdminCandidateFilteringRunsByFilterRunIdCandidates
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCandidateFilteringCandidateResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. No automated final selection.'
+      parameters:
+      - name: filterRunId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: filterRunId identifier.
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+  /admin/shortlists:
+    get:
+      tags:
+      - Shortlists
+      summary: List shortlists.
+      operationId: getAdminShortlists
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedShortlistResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Supports query behavior.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+    post:
+      tags:
+      - Shortlists
+      summary: Create a draft shortlist for an internship request/filter context.
+      operationId: postAdminShortlists
+      responses:
+        '201':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortlistResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Manual selection only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortlistCreateRequest'
+  /admin/shortlists/{shortlistId}:
+    get:
+      tags:
+      - Shortlists
+      summary: Retrieve shortlist with candidates and status.
+      operationId: getAdminShortlistsByShortlistId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortlistResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Guidance warning is non-blocking.'
+      parameters:
+      - name: shortlistId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: shortlistId identifier.
+  /admin/shortlists/{shortlistId}/candidates:
+    post:
+      tags:
+      - Shortlists
+      summary: Manually add candidate to shortlist.
+      operationId: postAdminShortlistsByShortlistIdCandidates
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortlistResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. No automated selection.'
+      parameters:
+      - name: shortlistId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: shortlistId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortlistCandidateRequest'
+  /admin/shortlists/{shortlistId}/candidates/{studentId}:
+    delete:
+      tags:
+      - Shortlists
+      summary: Remove candidate from shortlist.
+      operationId: deleteAdminShortlistsByShortlistIdCandidatesByStudentId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortlistResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Manual action.'
+      parameters:
+      - name: shortlistId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: shortlistId identifier.
+      - name: studentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: studentId identifier.
+  /admin/shortlists/{shortlistId}/finalize:
+    post:
+      tags:
+      - Shortlists
+      summary: Finalize shortlist with non-blocking guidance warning.
+      operationId: postAdminShortlistsByShortlistIdFinalize
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortlistFinalizeResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. No hard capacity blocking.'
+      parameters:
+      - name: shortlistId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: shortlistId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShortlistFinalizeRequest'
+  /admin/exports/shortlists/{shortlistId}:
+    post:
+      tags:
+      - Exports
+      summary: Start shortlist export job.
+      operationId: postAdminExportsShortlistsByShortlistId
+      responses:
+        '202':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Export job should be recoverable from failure.'
+      parameters:
+      - name: shortlistId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: shortlistId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportCreateRequest'
+  /admin/exports/{exportJobId}:
+    get:
+      tags:
+      - Exports
+      summary: Get export job status.
+      operationId: getAdminExportsByExportJobId
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. Admin only.'
+      parameters:
+      - name: exportJobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: exportJobId identifier.
+  /admin/exports/{exportJobId}/download:
+    get:
+      tags:
+      - Exports
+      summary: Download generated shortlist export file.
+      operationId: getAdminExportsByExportJobIdDownload
+      responses:
+        '200': *id001
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. File access must be authorized.'
+      parameters:
+      - name: exportJobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: exportJobId identifier.
+  /admin/exports/shortlists/{shortlistId}/bulk-cvs:
+    post:
+      tags:
+      - Exports
+      summary: Start bulk latest saved ATS-compliant CV export.
+      operationId: postAdminExportsShortlistsByShortlistIdBulkCvs
+      responses:
+        '202':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJobResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Latest saved CVs only.'
+      parameters:
+      - name: shortlistId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: shortlistId identifier.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportCreateRequest'
+  /admin/exports/{exportJobId}/bulk-cvs/download:
+    get:
+      tags:
+      - Exports
+      summary: Download generated bulk CV archive.
+      operationId: getAdminExportsByExportJobIdBulkCvsDownload
+      responses:
+        '200': *id001
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: Yes. Archive contains latest saved ATS-compliant CV PDFs.'
+      parameters:
+      - name: exportJobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: exportJobId identifier.
+  /admin/audit-events:
+    get:
+      tags:
+      - Audit/System Events
+      summary: Retrieve Admin-visible audit events when enabled by policy.
+      operationId: getAdminAuditEvents
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAuditEventResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '412':
+          $ref: '#/components/responses/Error412'
+        '415':
+          $ref: '#/components/responses/Error415'
+        '422':
+          $ref: '#/components/responses/Error422'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+        '503':
+          $ref: '#/components/responses/Error503'
+      description: 'Access: Admin. Audit: No. May be omitted if audit remains internal backend concern.'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+      - $ref: '#/components/parameters/Sort'
+      - $ref: '#/components/parameters/Search'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Zero-based page index.
+    Size:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Page size with an implementation-defined upper bound.
+    Sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+      description: Sort expression such as createdAt,desc.
+    Search:
+      name: search
+      in: query
+      schema:
+        type: string
+      description: Search term applied to approved searchable fields.
+  responses:
+    Error400:
+      description: Bad request.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error401:
+      description: Authentication required or invalid token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error403:
+      description: Access denied.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error404:
+      description: Resource not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error409:
+      description: Conflict.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error412:
+      description: Precondition failed or version conflict.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error415:
+      description: Unsupported media type.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error422:
+      description: Validation failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error429:
+      description: Too many requests.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error500:
+      description: Internal server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Error503:
+      description: Service unavailable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+  schemas:
+    AcademicLedgerCommitRequest:
+      type: object
+      properties:
+        confirm:
+          type: boolean
+          const: true
+    AcademicLedgerCommitResponse:
+      type: object
+      properties:
+        uploadId:
+          type: string
+          format: uuid
+        committedRecords:
+          type: integer
+        committedAt:
+          type: string
+          format: date-time
+    AcademicLedgerUploadRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+        academicYear:
+          type: string
+        notes:
+          type: string
+    AcademicLedgerUploadResponse:
+      type: object
+      properties:
+        uploadId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - UPLOADED
+          - STAGED
+          - VALIDATION_FAILED
+          - COMMITTED
+        uploadedAt:
+          type: string
+          format: date-time
+    AcademicLedgerValidationResultResponse:
+      type: object
+      properties:
+        uploadId:
+          type: string
+          format: uuid
+        valid:
+          type: boolean
+        rowErrors:
+          type: array
+          items:
+            type: object
+    ActivityRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    ActivityResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    AdminDashboardMetricsResponse:
+      type: object
+      properties:
+        totalStudents:
+          type: integer
+        registeredStudents:
+          type: integer
+        internshipRequestsCreated:
+          type: integer
+        lastUpdatedAt:
+          type: string
+          format: date-time
+    AdminLoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          writeOnly: true
+    AdminStudentDetailResponse:
+      type: object
+      properties:
+        student:
+          $ref: '#/components/schemas/StudentSummaryResponse'
+        profile:
+          $ref: '#/components/schemas/StudentProfileResponse'
+        latestCv:
+          $ref: '#/components/schemas/CvVersionResponse'
+    AuthTokenResponse:
+      type: object
+      required:
+      - accessToken
+      - tokenType
+      - expiresIn
+      - role
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          const: Bearer
+        expiresIn:
+          type: integer
+        role:
+          type: string
+          enum:
+          - STUDENT
+          - ADMIN
+        displayName:
+          type: string
+    AwardRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    AwardResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    CandidateFilteringRunRequest:
+      type: object
+      required:
+      - requestId
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        runtimeGpaLowerBound:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 4
+        runtimeGpaUpperBound:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 4
+        skillIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        competencyLevels:
+          type: array
+          items:
+            type: string
+            enum:
+            - BEGINNER
+            - INTERMEDIATE
+            - ADVANCED
+    CandidateFilteringRunResponse:
+      type: object
+      properties:
+        filterRunId:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        criteria:
+          type: object
+          additionalProperties: true
+        candidateCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+    CertificateRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    CertificateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    CompanyRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+        industry:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        contactPhone:
+          type: string
+        notes:
+          type: string
+    CompanyResponse:
+      type: object
+      properties:
+        companyId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        industry:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        contactPhone:
+          type: string
+        notes:
+          type: string
+    ContactLinkRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    ContactLinkResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    CurrentUserResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+          - STUDENT
+          - ADMIN
+        displayName:
+          type: string
+        universityEmail:
+          type: string
+          format: email
+    CvFreshnessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - CURRENT
+          - OUTDATED
+        changedAreas:
+          type: array
+          items:
+            type: string
+        message:
+          type: string
+    CvPreviewRequest:
+      type: object
+      properties:
+        sectionOrder:
+          type: array
+          items:
+            type: string
+        includedProjectIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        notes:
+          type: string
+    CvPreviewResponse:
+      type: object
+      properties:
+        previewId:
+          type: string
+          format: uuid
+        htmlPreview:
+          type: string
+        freshness:
+          $ref: '#/components/schemas/CvFreshnessResponse'
+    CvVersionCreateRequest:
+      type: object
+      properties:
+        sectionOrder:
+          type: array
+          items:
+            type: string
+        includedProjectIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        notes:
+          type: string
+    CvVersionResponse:
+      type: object
+      properties:
+        cvVersionId:
+          type: string
+          format: uuid
+        versionLabel:
+          type: string
+        latest:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        downloadUrl:
+          type: string
+          format: uri
+        freshnessStatus:
+          type: string
+          enum:
+          - CURRENT
+          - OUTDATED
+    DeclaredSkillRequest:
+      type: object
+      required:
+      - skillId
+      - competencyLevel
+      properties:
+        skillId:
+          type: string
+          format: uuid
+        competencyLevel:
+          type: string
+          enum:
+          - BEGINNER
+          - INTERMEDIATE
+          - ADVANCED
+    DeclaredSkillResponse:
+      type: object
+      properties:
+        declaredSkillId:
+          type: string
+          format: uuid
+        skillId:
+          type: string
+          format: uuid
+        skillName:
+          type: string
+        competencyLevel:
+          type: string
+          enum:
+          - BEGINNER
+          - INTERMEDIATE
+          - ADVANCED
+    ExperienceRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    ExperienceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        url:
+          type: string
+          format: uri
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+    ExportCreateRequest:
+      type: object
+      properties:
+        format:
+          type: string
+          enum:
+          - CSV
+          - XLSX
+          - PDF
+          - ZIP
+        includeCvFiles:
+          type: boolean
+    ExportJobResponse:
+      type: object
+      properties:
+        exportJobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - COMPLETED
+          - FAILED
+        downloadUrl:
+          type: string
+          format: uri
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    FieldError:
+      type: object
+      properties:
+        field:
+          type: string
+        code:
+          type: string
+        message:
+          type: string
+    GpaSummaryResponse:
+      type: object
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        computerScienceGpa:
+          type: number
+          format: double
+        calculatedAt:
+          type: string
+          format: date-time
+        source: object
+    InternshipRequestCreateRequest:
+      type: object
+      required:
+      - title
+      - companyId
+      properties:
+        companyId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        workMode:
+          type: string
+          enum:
+          - ONSITE
+          - REMOTE
+          - HYBRID
+        shortlistGuidanceValue:
+          type: integer
+          minimum: 0
+        requiredSkillIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    InternshipRequestResponse:
+      type: object
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        company:
+          $ref: '#/components/schemas/CompanyResponse'
+        title:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        workMode:
+          type: string
+          enum:
+          - ONSITE
+          - REMOTE
+          - HYBRID
+        shortlistGuidanceValue:
+          type: integer
+        requiredSkills:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternshipRequiredSkillResponse'
+    InternshipRequestUpdateRequest:
+      type: object
+      required:
+      - title
+      - companyId
+      properties:
+        companyId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        workMode:
+          type: string
+          enum:
+          - ONSITE
+          - REMOTE
+          - HYBRID
+        shortlistGuidanceValue:
+          type: integer
+          minimum: 0
+        requiredSkillIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    InternshipRequiredSkillRequest:
+      type: object
+      required:
+      - skillId
+      properties:
+        skillId:
+          type: string
+          format: uuid
+        requiredCompetencyLevel:
+          type: string
+          enum:
+          - BEGINNER
+          - INTERMEDIATE
+          - ADVANCED
+    InternshipRequiredSkillResponse:
+      type: object
+      properties:
+        requiredSkillId:
+          type: string
+          format: uuid
+        skillId:
+          type: string
+          format: uuid
+        skillName:
+          type: string
+        requiredCompetencyLevel:
+          type: string
+          enum:
+          - BEGINNER
+          - INTERMEDIATE
+          - ADVANCED
+    LogoutRequest:
+      type: object
+      properties:
+        allDevices:
+          type: boolean
+          default: false
+    OperationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        correlationId:
+          type: string
+    OtpResendResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    OtpVerifyRequest:
+      type: object
+      required:
+      - otpCode
+      properties:
+        otpCode:
+          type: string
+          minLength: 6
+          maxLength: 6
+          writeOnly: true
+    OtpVerifyResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    PageMetadata:
+      type: object
+      required:
+      - page
+      - size
+      - totalElements
+      - totalPages
+      - sort
+      properties:
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+        sort:
+          type: string
+    PagedAcademicLedgerUploadResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedAcademicRecordResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedActivityResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedAuditEventResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedAwardResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedCandidateFilteringCandidateResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedCertificateResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedCompanyResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedContactLinkResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedCvVersionResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedDeclaredSkillResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedExperienceResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedIndividualSkillResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedInternshipRequestResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedInternshipRequiredSkillResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedProjectResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedShortlistResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedSkillCategoryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedSkillClusterResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PagedStudentSummaryResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        page:
+          $ref: '#/components/schemas/PageMetadata'
+    PasswordCreateRequest:
+      type: object
+      required:
+      - newPassword
+      - confirmPassword
+      properties:
+        newPassword:
+          type: string
+          format: password
+          writeOnly: true
+        confirmPassword:
+          type: string
+          format: password
+          writeOnly: true
+    PasswordResetResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    PasswordResetStartRequest:
+      type: object
+      required:
+      - universityEmail
+      properties:
+        universityEmail:
+          type: string
+          format: email
+    ProblemDetails:
+      type: object
+      required:
+      - type
+      - title
+      - status
+      - code
+      - message
+      - correlationId
+      properties:
+        type:
+          type: string
+          format: uri
+          examples:
+          - https://uor-cv-system/errors/validation-failed
+        title:
+          type: string
+          examples:
+          - Validation failed
+        status:
+          type: integer
+          examples:
+          - 422
+        code:
+          type: string
+          examples:
+          - VALIDATION_FAILED
+        message:
+          type: string
+          examples:
+          - One or more fields are invalid.
+        correlationId:
+          type: string
+          examples:
+          - req-20260630-0001
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+        details:
+          type: object
+          additionalProperties: true
+    ProjectRequest:
+      type: object
+      required:
+      - title
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        repositoryUrl:
+          type: string
+          format: uri
+        demoUrl:
+          type: string
+          format: uri
+        skillIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        includeInCv:
+          type: boolean
+    ProjectResponse:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        repositoryUrl:
+          type: string
+          format: uri
+        demoUrl:
+          type: string
+          format: uri
+        skills:
+          type: array
+          items:
+            $ref: '#/components/schemas/IndividualSkillResponse'
+        includeInCv:
+          type: boolean
+    ShortlistCandidateRequest:
+      type: object
+      required:
+      - studentId
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        note:
+          type: string
+    ShortlistCreateRequest:
+      type: object
+      required:
+      - requestId
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        filterRunId:
+          type: string
+          format: uuid
+        name:
+          type: string
+    ShortlistFinalizeRequest:
+      type: object
+      properties:
+        acknowledgeGuidanceWarning:
+          type: boolean
+        finalizationNote:
+          type: string
+    ShortlistFinalizeResponse:
+      type: object
+      properties:
+        shortlistId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: FINALIZED
+        finalizedAt:
+          type: string
+          format: date-time
+        guidanceWarningShown:
+          type: boolean
+    ShortlistResponse:
+      type: object
+      properties:
+        shortlistId:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - FINALIZED
+        guidanceWarning:
+          type: string
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/CandidateFilteringCandidateResponse'
+    SkillTaxonomyResponse:
+      type: object
+      properties:
+        clusters:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillClusterResponse'
+    StudentLoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          writeOnly: true
+    StudentProfileResponse:
+      type: object
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        indexNumber:
+          type: string
+          readOnly: true
+        universityEmail:
+          type: string
+          format: email
+          readOnly: true
+        summary:
+          type: string
+        phone:
+          type: string
+        profilePhotoUrl:
+          type: string
+          format: uri
+    StudentProfileUpdateRequest:
+      type: object
+      properties:
+        fullName:
+          type: string
+        summary:
+          type: string
+        phone:
+          type: string
+        profilePhotoFileId:
+          type: string
+          format: uuid
+    StudentVerificationResponse:
+      type: object
+      properties:
+        verificationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - OTP_SENT
+          - VERIFICATION_FAILED
+        message:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    StudentVerificationStartRequest:
+      type: object
+      required:
+      - fullName
+      - indexNumber
+      - universityEmail
+      properties:
+        fullName:
+          type: string
+        indexNumber:
+          type: string
+        universityEmail:
+          type: string
+          format: email
+    AuditEventResponse:
+      type: object
+      properties:
+        auditEventId:
+          type: string
+          format: uuid
+        actorRole:
+          type: string
+        action:
+          type: string
+        resourceType:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        correlationId:
+          type: string
+  examples:
+    ValidationFailed:
+      value:
+        type: https://uor-cv-system/errors/validation-failed
+        title: Validation failed
+        status: 422
+        code: VALIDATION_FAILED
+        message: One or more fields are invalid.
+        correlationId: req-20260630-0001
+        fieldErrors:
+        - field: universityEmail
+          code: INVALID_EMAIL_FORMAT
+          message: University email format is invalid.
