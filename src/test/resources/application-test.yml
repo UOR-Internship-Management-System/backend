@@ -12,3 +12,13 @@ spring:
 
   flyway:
     enabled: false
+
+app:
+  security:
+    jwt:
+      issuer: cv-management-test
+      secret: test-only-secret-change-in-real-environments
+      access-token-ttl: PT30M
+      refresh-token-ttl: P7D
+    cors:
+      allowed-origins: http://localhost:5173
