@@ -1,1 +1,0 @@
--- TODO: Implement migration for V010__create_company_tables.sql

@@ -1,1 +1,0 @@
--- TODO: Implement migration for V013__create_shortlist_tables.sql

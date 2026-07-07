@@ -1,1 +1,0 @@
--- TODO: Implement migration for V019__seed_grade_scale.sql
