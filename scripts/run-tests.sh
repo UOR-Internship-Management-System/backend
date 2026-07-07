@@ -1,2 +1,4 @@
-#!/bin/bash
-# TODO: Implement run-tests.sh
+#!/usr/bin/env sh
+set -eu
+
+./mvnw test

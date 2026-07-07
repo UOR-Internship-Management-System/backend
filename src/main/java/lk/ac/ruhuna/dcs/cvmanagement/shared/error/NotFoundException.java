@@ -1,5 +1,10 @@
 package lk.ac.ruhuna.dcs.cvmanagement.shared.error;
 
-public class NotFoundException {
-    // TODO: Implement in the appropriate sprint.
+import org.springframework.http.HttpStatus;
+
+public class NotFoundException extends ApplicationException {
+
+    public NotFoundException(String message) {
+        super(ApiErrorCode.NOT_FOUND, HttpStatus.NOT_FOUND, message);
+    }
 }

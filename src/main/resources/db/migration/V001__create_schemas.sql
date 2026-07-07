@@ -1,1 +1,1 @@
--- TODO: Implement migration for V001__create_schemas.sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;

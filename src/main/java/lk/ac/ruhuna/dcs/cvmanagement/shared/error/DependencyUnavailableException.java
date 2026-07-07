@@ -1,5 +1,10 @@
 package lk.ac.ruhuna.dcs.cvmanagement.shared.error;
 
-public class DependencyUnavailableException {
-    // TODO: Implement in the appropriate sprint.
+import org.springframework.http.HttpStatus;
+
+public class DependencyUnavailableException extends ApplicationException {
+
+    public DependencyUnavailableException(String message) {
+        super(ApiErrorCode.DEPENDENCY_UNAVAILABLE, HttpStatus.SERVICE_UNAVAILABLE, message);
+    }
 }
