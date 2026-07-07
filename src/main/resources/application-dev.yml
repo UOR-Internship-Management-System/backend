@@ -1,1 +1,25 @@
-# TODO: Configure application-dev.yml
+spring:
+  datasource:
+    url: jdbc:postgresql://${CV_DB_HOST:localhost}:${CV_DB_PORT:5432}/${CV_DB_NAME:cv_management}
+    username: ${CV_DB_USERNAME:cv_user}
+    password: ${CV_DB_PASSWORD:cv_local_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    lk.ac.ruhuna.dcs.cvmanagement: DEBUG
+    org.flywaydb: INFO
+    org.hibernate.SQL: WARN

@@ -1,5 +1,5 @@
 package lk.ac.ruhuna.dcs.cvmanagement.shared.domain;
 
 public enum SoftDeleteState {
-    // TODO: Implement in the appropriate sprint.
+    // Activation is reserved for the sprint that implements the approved behavior.
 }
