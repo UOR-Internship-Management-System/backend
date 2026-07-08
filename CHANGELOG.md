@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Chore: Finalized Sprint 1 backend foundation closure with verifiable evidence scripts and strict Flyway test enforcement.
 ## [0.0.1-SNAPSHOT] — Sprint 1 Foundation — 2026-07-07
 
 ### Added
