@@ -1,8 +1,8 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.verification.api.dto.request;
 
-/**
- * Reserved API request DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class OtpVerifyRequest {
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+
+public record OtpVerifyRequest(
+        @NotBlank @Pattern(regexp = "^\\d{6}$") String otp) {
 }

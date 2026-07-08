@@ -380,7 +380,7 @@ paths:
     post:
       tags:
       - Student Verification and OTP
-      summary: Start forgot-password flow for a Student university email.
+      summary: Start OTP-based password reset for a supported Student or Admin account.
       operationId: postPasswordResets
       responses:
         '201':
@@ -411,7 +411,7 @@ paths:
           $ref: '#/components/responses/Error500'
         '503':
           $ref: '#/components/responses/Error503'
-      description: 'Access: Public. Audit: Security. Uses OTP, not temporary password.'
+      description: 'Access: Public. Audit: Security. Supports STUDENT and ADMIN accounts. Admin accounts must already be predefined/provisioned. This endpoint must not create accounts, approve registrations, or issue temporary passwords.'
       security: []
       requestBody:
         required: true
@@ -4453,23 +4453,19 @@ components:
       required:
       - accessToken
       - tokenType
-      - expiresIn
-      - role
+      - expiresInSeconds
+      - user
       properties:
         accessToken:
           type: string
         tokenType:
           type: string
           const: Bearer
-        expiresIn:
+        expiresInSeconds:
           type: integer
-        role:
-          type: string
-          enum:
-          - STUDENT
-          - ADMIN
-        displayName:
-          type: string
+          format: int64
+        user:
+          $ref: '#/components/schemas/CurrentUserResponse'
     AwardRequest:
       type: object
       properties:
@@ -4658,20 +4654,36 @@ components:
           format: date
     CurrentUserResponse:
       type: object
+      required:
+      - userId
+      - accountId
+      - email
+      - roles
+      - primaryRole
       properties:
         userId:
           type: string
           format: uuid
-        role:
+        accountId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum:
+            - STUDENT
+            - ADMIN
+        primaryRole:
           type: string
           enum:
           - STUDENT
           - ADMIN
-        displayName:
-          type: string
-        universityEmail:
-          type: string
-          format: email
     CvFreshnessResponse:
       type: object
       properties:
@@ -4985,10 +4997,7 @@ components:
           - ADVANCED
     LogoutRequest:
       type: object
-      properties:
-        allDevices:
-          type: boolean
-          default: false
+      additionalProperties: false
     OperationResponse:
       type: object
       properties:
@@ -5000,34 +5009,37 @@ components:
           type: string
     OtpResendResponse:
       type: object
+      required:
+      - message
+      - expiresInSeconds
+      - resendAvailableInSeconds
       properties:
-        status:
-          type: string
         message:
           type: string
-        expiresAt:
-          type: string
-          format: date-time
+        expiresInSeconds:
+          type: integer
+          format: int64
+        resendAvailableInSeconds:
+          type: integer
+          format: int64
     OtpVerifyRequest:
       type: object
       required:
-      - otpCode
+      - otp
       properties:
-        otpCode:
+        otp:
           type: string
+          pattern: ^\d{6}$
           minLength: 6
           maxLength: 6
           writeOnly: true
     OtpVerifyResponse:
       type: object
+      required:
+      - message
       properties:
-        status:
-          type: string
         message:
           type: string
-        expiresAt:
-          type: string
-          format: date-time
     PageMetadata:
       type: object
       required:
@@ -5248,20 +5260,31 @@ components:
           writeOnly: true
     PasswordResetResponse:
       type: object
+      required:
+      - message
       properties:
-        status:
+        resetId:
           type: string
+          format: uuid
+          nullable: true
         message:
           type: string
-        expiresAt:
-          type: string
-          format: date-time
+        expiresInSeconds:
+          type: integer
+          format: int64
+          nullable: true
     PasswordResetStartRequest:
       type: object
       required:
-      - universityEmail
+      - accountType
+      - email
       properties:
-        universityEmail:
+        accountType:
+          type: string
+          enum:
+          - STUDENT
+          - ADMIN
+        email:
           type: string
           format: email
     ProblemDetails:
@@ -5470,20 +5493,19 @@ components:
           format: uuid
     StudentVerificationResponse:
       type: object
+      required:
+      - verificationId
+      - message
+      - expiresInSeconds
       properties:
         verificationId:
           type: string
           format: uuid
-        status:
-          type: string
-          enum:
-          - OTP_SENT
-          - VERIFICATION_FAILED
         message:
           type: string
-        expiresAt:
-          type: string
-          format: date-time
+        expiresInSeconds:
+          type: integer
+          format: int64
     StudentVerificationStartRequest:
       type: object
       required:

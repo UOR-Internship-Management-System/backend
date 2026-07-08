@@ -1,8 +1,10 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.auth.api.dto.request;
 
-/**
- * Reserved API request DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class AdminLoginRequest {
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record AdminLoginRequest(
+        @NotBlank @Email @Size(max = 254) String email,
+        @NotBlank @Size(min = 8, max = 128) String password) {
 }
