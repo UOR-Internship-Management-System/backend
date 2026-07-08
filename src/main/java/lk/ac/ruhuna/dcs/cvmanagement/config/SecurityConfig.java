@@ -2,7 +2,9 @@ package lk.ac.ruhuna.dcs.cvmanagement.config;
 
 import java.util.Arrays;
 import java.util.List;
+import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.jwt.JwtAuthenticationFilter;
 import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.jwt.JwtProperties;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.domain.policy.OtpRateLimitPolicy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -17,19 +19,21 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, OtpRateLimitPolicy.class})
 public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
         "/actuator/health",
         "/actuator/health/**",
         "/api/v1/health",
-        "/api/v1/auth/**",
+        "/api/v1/auth/student/login",
+        "/api/v1/auth/admin/login",
         "/api/v1/student-verifications",
         "/api/v1/student-verifications/**",
         "/api/v1/password-resets",
@@ -41,7 +45,8 @@ public class SecurityConfig {
     };
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter)
+            throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -54,6 +59,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/student/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 
