@@ -1,5 +1,8 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.companies.api.dto.request;
 
+/**
+ * Reserved API request DTO boundary for its approved module operations.
+ * <p>Activated only in the sprint that implements the approved behavior.
+ */
 public class CompanyRequest {
-    // TODO: Implement in the appropriate sprint.
 }
