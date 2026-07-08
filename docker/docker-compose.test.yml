@@ -1,1 +1,24 @@
-# TODO: Configure docker-compose.test.yml
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: cv-management-postgres-test
+    environment:
+      POSTGRES_DB: cv_management_test
+      POSTGRES_USER: cv_user
+      POSTGRES_PASSWORD: cv_local_password
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cv_user -d cv_management_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - cv-management-test
+
+networks:
+  cv-management-test:
+    driver: bridge

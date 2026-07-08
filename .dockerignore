@@ -1,1 +1,42 @@
-// TODO: Implement .dockerignore
+# Build output
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
+
+# Documentation (not needed in image)
+docs/
+*.md
+LICENSE
+
+# CI/CD
+.github/
+
+# Docker files themselves
+docker/
+Dockerfile
+
+# Agents config
+.agents/
+
+# OS files
+.DS_Store
+Thumbs.db

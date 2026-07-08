@@ -1,5 +1,8 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.auditlog.persistence.repository;
 
+/**
+ * Spring Data repository for C: persistence.
+ * <p>Activated only in the sprint that implements the approved behavior.
+ */
 public interface AuditLogRepository {
-    // TODO: Implement in the appropriate sprint.
 }

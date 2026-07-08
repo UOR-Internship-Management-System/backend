@@ -1,5 +1,8 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.repository;
 
+/**
+ * Spring Data repository for C: persistence.
+ * <p>Activated only in the sprint that implements the approved behavior.
+ */
 public interface ProjectSkillRepository {
-    // TODO: Implement in the appropriate sprint.
 }
