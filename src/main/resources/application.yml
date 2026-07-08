@@ -39,6 +39,13 @@ management:
       enabled: true
 
 app:
+  auth:
+    otp:
+      length: ${APP_AUTH_OTP_LENGTH:6}
+      ttl: ${APP_AUTH_OTP_TTL:PT5M}
+      max-attempts: ${APP_AUTH_OTP_MAX_ATTEMPTS:3}
+      resend-cooldown: ${APP_AUTH_OTP_RESEND_COOLDOWN:PT60S}
+      max-resends: ${APP_AUTH_OTP_MAX_RESENDS:3}
   security:
     jwt:
       issuer: ${JWT_ISSUER:cv-management}

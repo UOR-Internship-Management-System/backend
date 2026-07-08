@@ -1,8 +1,14 @@
 package lk.ac.ruhuna.dcs.cvmanagement.config;
 
-/**
- * Reserved Sprint boundary for application Clock bean configuration.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
+import java.time.Clock;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
 public class ClockConfig {
+
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
+    }
 }
