@@ -95,7 +95,7 @@ public class OtpService {
                 "AUTH_OTP_VERIFIED",
                 "verification_session",
                 context.id().toString());
-        return new OtpVerifyResponse("OTP verified successfully.");
+        return new OtpVerifyResponse(true);
     }
 
     @Transactional
@@ -133,10 +133,7 @@ public class OtpService {
                 Timestamp.from(now),
                 context.id());
         otpEmailSender.sendOtp(context.email(), expectedPurpose.name(), otp, expiresAt);
-        return new OtpResendResponse(
-                "OTP resent successfully.",
-                policy.ttl().toSeconds(),
-                policy.resendCooldown().toSeconds());
+        return new OtpResendResponse("OTP resent successfully.", policy.ttl().toSeconds());
     }
 
     public OtpContext requireVerified(UUID contextId, OtpPurpose expectedPurpose) {

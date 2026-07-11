@@ -57,7 +57,7 @@ public class AuthService {
 
     @Transactional
     public AuthTokenResponse loginStudent(StudentLoginRequest request) {
-        return login(normalizeEmail(request.universityEmail()), request.password(), RoleName.STUDENT);
+        return login(normalizeEmail(request.email()), request.password(), RoleName.STUDENT);
     }
 
     @Transactional

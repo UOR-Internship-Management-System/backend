@@ -2,8 +2,8 @@
 
 The OpenAPI contract is stored in both documentation and runtime resource locations:
 
-- `docs/api/CV_Management_API_OpenAPI_v1.0.yaml`
-- `src/main/resources/openapi/CV_Management_API_OpenAPI_v1.0.yaml`
+- `docs/api/CV_Management_API_OpenAPI_v1.1.yaml`
+- `src/main/resources/openapi/CV_Management_API_OpenAPI_v1.1.yaml`
 
 ## Sprint 1 Check
 
