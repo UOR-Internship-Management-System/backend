@@ -88,7 +88,7 @@ public class AuthService {
     public Optional<AccountRecord> findResetEligible(AccountType accountType, String email) {
         Optional<AccountRecord> account = findAccountByEmail(normalizeEmail(email));
         if (account.isEmpty()
-                || !ACTIVE.equals(account.get().status())
+                || (!ACTIVE.equals(account.get().status()) && !"PASSWORD_SETUP_REQUIRED".equals(account.get().status()))
                 || !account.get().roles().contains(accountType.role())) {
             return Optional.empty();
         }
