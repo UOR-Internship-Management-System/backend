@@ -83,8 +83,8 @@ Hibernate `ddl-auto` is set to `validate` for local runtime. Flyway is the schem
 
 The approved API contract is placed at:
 
-- `docs/api/CV_Management_API_OpenAPI_v1.0.yaml`
-- `src/main/resources/openapi/CV_Management_API_OpenAPI_v1.0.yaml`
+- `docs/api/CV_Management_API_OpenAPI_v1.1.yaml`
+- `src/main/resources/openapi/CV_Management_API_OpenAPI_v1.1.yaml`
 
 ## Scripts
 

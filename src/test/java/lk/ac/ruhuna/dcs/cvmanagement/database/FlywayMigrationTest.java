@@ -10,7 +10,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
     @Container
@@ -35,6 +35,6 @@ class FlywayMigrationTest {
                 .load();
 
         assertThat(flyway.migrate().success).isTrue();
-        assertThat(flyway.info().applied()).hasSize(6);
+        assertThat(flyway.info().applied()).hasSize(8);
     }
 }

@@ -1,8 +1,13 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.auth.api.dto.response;
 
-/**
- * Reserved API response DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class CurrentUserResponse {
+import java.util.Set;
+import java.util.UUID;
+
+public record CurrentUserResponse(
+        UUID userId,
+        UUID accountId,
+        String email,
+        String displayName,
+        Set<String> roles,
+        String primaryRole) {
 }
