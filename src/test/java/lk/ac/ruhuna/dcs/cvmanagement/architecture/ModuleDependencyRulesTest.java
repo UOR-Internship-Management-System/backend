@@ -44,6 +44,9 @@ class ModuleDependencyRulesTest {
             ROOT_PACKAGE + ".infrastructure.",
             ROOT_PACKAGE + ".config.");
 
+    private static final Set<String> SPRINT_2_ALLOWED_MODULE_IMPORTS = Set.of(
+            "auth->verification");
+
     /** Annotation patterns that would expose accidental endpoints. */
     private static final Pattern ENDPOINT_ANNOTATION = Pattern.compile(
             "@(GetMapping|PostMapping|PutMapping|PatchMapping|DeleteMapping|RequestMapping)");
@@ -129,6 +132,11 @@ class ModuleDependencyRulesTest {
 
                                     // Check if importing from another module
                                     if (imported.startsWith(MODULES_PACKAGE + ".")) {
+                                        String importedModule = imported.substring((MODULES_PACKAGE + ".").length())
+                                                .split("\\.")[0];
+                                        if (SPRINT_2_ALLOWED_MODULE_IMPORTS.contains(moduleName + "->" + importedModule)) {
+                                            continue;
+                                        }
                                         violations.add(path.getFileName() + " in module '"
                                                 + moduleName + "' imports cross-module: " + imported);
                                     }
@@ -149,8 +157,8 @@ class ModuleDependencyRulesTest {
     void futureModuleControllersDoNotExposeEndpoints() throws IOException {
         List<String> violations = new ArrayList<>();
 
-        // health is the only module with active endpoints in Sprint 1
-        Set<String> activeModules = Set.of("health");
+        // Sprint 2 activates complete authentication plus Student verification endpoints.
+        Set<String> activeModules = Set.of("health", "auth", "verification");
 
         for (String moduleName : MODULE_NAMES) {
             if (activeModules.contains(moduleName)) {
@@ -169,9 +177,9 @@ class ModuleDependencyRulesTest {
                             try {
                                 String content = Files.readString(path, StandardCharsets.UTF_8);
                                 if (ENDPOINT_ANNOTATION.matcher(content).find()) {
-                                    violations.add(path.getFileName()
-                                            + " in future module '" + moduleName
-                                            + "' exposes an endpoint annotation in Sprint 1");
+                                            violations.add(path.getFileName()
+                                                    + " in future module '" + moduleName
+                                            + "' exposes an endpoint annotation before its approved sprint");
                                 }
                             } catch (IOException e) {
                                 throw new IllegalStateException("Cannot read " + path, e);

@@ -1,8 +1,12 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.verification.api.dto.request;
 
-/**
- * Reserved API request DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class PasswordResetStartRequest {
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.security.AccountType;
+
+public record PasswordResetStartRequest(
+        @NotNull AccountType accountType,
+        @NotBlank @Email @Size(max = 254) String email) {
 }
