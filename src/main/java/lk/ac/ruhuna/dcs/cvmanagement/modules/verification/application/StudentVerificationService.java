@@ -65,8 +65,9 @@ public class StudentVerificationService {
                 student.id().toString());
         return new StudentVerificationResponse(
                 result.contextId(),
+                "OTP_SENT",
                 "Verification OTP sent to the university email.",
-                result.ttl().toSeconds());
+                result.expiresAt());
     }
 
     public OtpVerifyResponse verifyOtp(UUID verificationId, String otp) {

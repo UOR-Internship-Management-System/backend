@@ -42,12 +42,12 @@ public class StudentVerificationController {
     public OtpVerifyResponse verifyOtp(
             @PathVariable UUID verificationId,
             @Valid @RequestBody OtpVerifyRequest request) {
-        return studentVerificationService.verifyOtp(verificationId, request.otp());
+        return studentVerificationService.verifyOtp(verificationId, request.otpCode());
     }
 
     @PostMapping("/{verificationId}/otp/resend")
-    public OtpResendResponse resendOtp(@PathVariable UUID verificationId) {
-        return studentVerificationService.resendOtp(verificationId);
+    public ResponseEntity<OtpResendResponse> resendOtp(@PathVariable UUID verificationId) {
+        return ResponseEntity.accepted().body(studentVerificationService.resendOtp(verificationId));
     }
 
     @PostMapping("/{verificationId}/password")

@@ -23,3 +23,7 @@ logging:
     lk.ac.ruhuna.dcs.cvmanagement: DEBUG
     org.flywaydb: INFO
     org.hibernate.SQL: WARN
+
+app:
+  email:
+    log-otp: true

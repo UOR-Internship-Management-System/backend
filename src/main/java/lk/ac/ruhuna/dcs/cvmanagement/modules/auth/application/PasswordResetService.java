@@ -55,7 +55,7 @@ public class PasswordResetService {
                             "AUTH_PASSWORD_RESET_REQUEST_NON_ELIGIBLE",
                             "user_account",
                             null);
-                    return new PasswordResetResponse(null, SAFE_RESET_MESSAGE, null);
+                    return new PasswordResetResponse(UUID.randomUUID(), SAFE_RESET_MESSAGE, otpService.expiresInSeconds());
                 });
     }
 

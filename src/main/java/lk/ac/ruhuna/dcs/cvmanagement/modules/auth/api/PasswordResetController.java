@@ -1,7 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.auth.api;
 
 import jakarta.validation.Valid;
-import java.net.URI;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.auth.application.PasswordResetService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.api.dto.request.OtpVerifyRequest;
@@ -32,24 +31,19 @@ public class PasswordResetController {
     @PostMapping
     public ResponseEntity<PasswordResetResponse> start(@Valid @RequestBody PasswordResetStartRequest request) {
         PasswordResetResponse response = passwordResetService.start(request);
-        if (response.resetId() == null) {
-            return ResponseEntity.accepted().body(response);
-        }
-        return ResponseEntity
-                .created(URI.create("/api/v1/password-resets/" + response.resetId()))
-                .body(response);
+        return ResponseEntity.accepted().body(response);
     }
 
     @PostMapping("/{resetId}/otp/verify")
     public OtpVerifyResponse verifyOtp(
             @PathVariable UUID resetId,
             @Valid @RequestBody OtpVerifyRequest request) {
-        return passwordResetService.verifyOtp(resetId, request.otp());
+        return passwordResetService.verifyOtp(resetId, request.otpCode());
     }
 
     @PostMapping("/{resetId}/otp/resend")
-    public OtpResendResponse resendOtp(@PathVariable UUID resetId) {
-        return passwordResetService.resendOtp(resetId);
+    public ResponseEntity<OtpResendResponse> resendOtp(@PathVariable UUID resetId) {
+        return ResponseEntity.accepted().body(passwordResetService.resendOtp(resetId));
     }
 
     @PostMapping("/{resetId}/password")

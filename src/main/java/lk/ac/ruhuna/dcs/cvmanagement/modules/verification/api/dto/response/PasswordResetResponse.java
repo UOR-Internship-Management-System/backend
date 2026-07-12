@@ -5,5 +5,5 @@ import java.util.UUID;
 public record PasswordResetResponse(
         UUID resetId,
         String message,
-        Long expiresInSeconds) {
+        long expiresInSeconds) {
 }

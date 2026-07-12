@@ -49,7 +49,7 @@ class AuthApiIntegrationTest {
 
         mockMvc.perform(post("/api/v1/student-verifications/{id}/otp/verify", verificationId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"otp\":\"" + OTP + "\"}"))
+                        .content("{\"otpCode\":\"" + OTP + "\"}"))
                 .andExpect(status().isOk());
 
         mockMvc.perform(post("/api/v1/student-verifications/{id}/password", verificationId)
@@ -89,6 +89,21 @@ class AuthApiIntegrationTest {
     }
 
     @Test
+    void studentVerificationOtpResendReturnsAccepted() throws Exception {
+        UUID verificationId = startStudentVerification();
+        makeResendAvailable(verificationId);
+
+        MvcResult result = mockMvc.perform(post("/api/v1/student-verifications/{id}/otp/resend", verificationId))
+                .andExpect(status().isAccepted())
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.get("message").asText()).isNotBlank();
+        assertThat(body.get("expiresInSeconds").asLong()).isGreaterThan(0);
+        assertThat(body.has("resendAvailableInSeconds")).isFalse();
+    }
+
+    @Test
     void adminPasswordResetUpdatesHashAndAllowsNewLogin() throws Exception {
         UUID adminId = seedAdmin("AdminPass123", true);
 
@@ -97,7 +112,7 @@ class AuthApiIntegrationTest {
                         .content("""
                                 {"accountType":"ADMIN","email":"admin@dcs.ruh.ac.lk"}
                                 """))
-                .andExpect(status().isCreated())
+                .andExpect(status().isAccepted())
                 .andReturn();
         UUID resetId = UUID.fromString(objectMapper.readTree(start.getResponse().getContentAsString())
                 .get("resetId").asText());
@@ -105,7 +120,7 @@ class AuthApiIntegrationTest {
 
         mockMvc.perform(post("/api/v1/password-resets/{id}/otp/verify", resetId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"otp\":\"" + OTP + "\"}"))
+                        .content("{\"otpCode\":\"" + OTP + "\"}"))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/password-resets/{id}/password", resetId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -123,13 +138,43 @@ class AuthApiIntegrationTest {
     }
 
     @Test
+    void passwordResetOtpResendReturnsAccepted() throws Exception {
+        seedAdmin("AdminPass123", true);
+
+        MvcResult start = mockMvc.perform(post("/api/v1/password-resets")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountType":"ADMIN","email":"admin@dcs.ruh.ac.lk"}
+                                """))
+                .andExpect(status().isAccepted())
+                .andReturn();
+        UUID resetId = UUID.fromString(objectMapper.readTree(start.getResponse().getContentAsString())
+                .get("resetId").asText());
+        makeResendAvailable(resetId);
+
+        MvcResult result = mockMvc.perform(post("/api/v1/password-resets/{id}/otp/resend", resetId))
+                .andExpect(status().isAccepted())
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.get("message").asText()).isNotBlank();
+        assertThat(body.get("expiresInSeconds").asLong()).isGreaterThan(0);
+        assertThat(body.has("resendAvailableInSeconds")).isFalse();
+    }
+
+    @Test
     void unknownPasswordResetEmailDoesNotCreateAccount() throws Exception {
-        mockMvc.perform(post("/api/v1/password-resets")
+        MvcResult start = mockMvc.perform(post("/api/v1/password-resets")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountType":"ADMIN","email":"missing@dcs.ruh.ac.lk"}
                                 """))
-                .andExpect(status().isAccepted());
+                .andExpect(status().isAccepted())
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(start.getResponse().getContentAsString());
+        assertThat(body.get("resetId").asText()).isNotBlank();
+        assertThat(body.get("expiresInSeconds").asLong()).isGreaterThan(0);
 
         Integer accounts = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM user_accounts WHERE university_email = ?",
@@ -144,7 +189,7 @@ class AuthApiIntegrationTest {
         setOtp(verificationId, OTP);
         mockMvc.perform(post("/api/v1/student-verifications/{id}/otp/verify", verificationId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"otp\":\"" + OTP + "\"}"))
+                        .content("{\"otpCode\":\"" + OTP + "\"}"))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/student-verifications/{id}/password", verificationId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -181,7 +226,7 @@ class AuthApiIntegrationTest {
         MvcResult result = mockMvc.perform(post("/api/v1/auth/student/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"universityEmail":"%s","password":"%s"}
+                                {"email":"%s","password":"%s"}
                                 """.formatted(email, password)))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -229,6 +274,14 @@ class AuthApiIntegrationTest {
                 "UPDATE verification_sessions SET otp_hash = ?, expires_at = ?, status = 'PENDING' WHERE id = ?",
                 passwordEncoder.encode(otp),
                 Timestamp.from(Instant.now().plusSeconds(300)),
+                contextId);
+    }
+
+    private void makeResendAvailable(UUID contextId) {
+        Instant oldEnough = Instant.now().minusSeconds(120);
+        jdbcTemplate.update(
+                "UPDATE verification_sessions SET created_at = ?, last_resend_at = NULL WHERE id = ?",
+                Timestamp.from(oldEnough),
                 contextId);
     }
 }
