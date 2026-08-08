@@ -7,24 +7,24 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "skill_categories")
+@Table(name = "skill_core_clusters")
 @Getter
 @Setter
 @NoArgsConstructor
-public class SkillCategoryEntity {
+public class SkillCoreClusterEntity {
 
     @Id
     private UUID id;
 
-    @Column(name = "core_cluster_id", nullable = false)
-    private UUID coreClusterId;
-
-    @Column(name = "category_name", nullable = false)
-    private String categoryName;
+    @Column(name = "cluster_name", nullable = false, unique = true)
+    private String clusterName;
 
     @Column(name = "description")
     private String description;
 
     @Column(name = "display_order")
     private Integer displayOrder;
+
+    @Column(name = "is_active")
+    private boolean active;
 }
