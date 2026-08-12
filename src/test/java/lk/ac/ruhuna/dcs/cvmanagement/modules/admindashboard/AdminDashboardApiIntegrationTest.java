@@ -51,7 +51,7 @@ class AdminDashboardApiIntegrationTest {
                 "INSERT INTO eligible_students (id, index_number, university_email, full_name, academic_level, is_active) "
                         + "VALUES (?, ?, ?, ?, ?, TRUE)",
                 UUID.fromString("20000000-0000-0000-0000-000000000002"),
-                "SC-2020-002",
+                "SC/2020/00002",
                 "sc2020002@dcs.ruh.ac.lk",
                 "Ayesha Fernando",
                 3);
@@ -152,7 +152,7 @@ class AdminDashboardApiIntegrationTest {
                 "INSERT INTO user_roles (user_id, role_id) SELECT ?, id FROM roles WHERE name = 'ROLE_STUDENT'",
                 accountId);
         jdbcTemplate.update(
-                "UPDATE eligible_students SET user_account_id = ? WHERE index_number = 'SC-2020-001'",
+                "UPDATE eligible_students SET user_account_id = ? WHERE index_number = 'SC/2020/00001'",
                 accountId);
     }
 }

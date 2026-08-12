@@ -87,7 +87,7 @@ INSERT INTO eligible_students (
     id, index_number, university_email, full_name, academic_level, is_active
 ) VALUES (
     '20000000-0000-0000-0000-000000000001',
-    'SC-2020-001',
+    'SC/2020/00001',
     'sc2020001@dcs.ruh.ac.lk',
     'Nimal Perera',
     3,
