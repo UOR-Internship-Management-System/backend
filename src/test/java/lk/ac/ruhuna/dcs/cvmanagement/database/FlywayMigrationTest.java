@@ -35,6 +35,6 @@ class FlywayMigrationTest {
                 .load();
 
         assertThat(flyway.migrate().success).isTrue();
-        assertThat(flyway.info().applied()).hasSize(21);
+        assertThat(flyway.info().applied()).hasSize(22);
     }
 }
