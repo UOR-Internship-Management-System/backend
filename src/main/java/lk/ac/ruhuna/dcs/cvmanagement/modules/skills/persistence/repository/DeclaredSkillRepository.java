@@ -12,13 +12,13 @@ import org.springframework.data.repository.query.Param;
 public interface DeclaredSkillRepository extends JpaRepository<DeclaredSkillEntity, UUID> {
 
     @Query("""
-            SELECT d FROM DeclaredSkillEntity d
-            JOIN SkillEntity s ON s.id = d.skillId
-            WHERE d.studentId = :studentId
-              AND (:search IS NULL OR LOWER(s.skillName) LIKE LOWER(CONCAT('%', :search, '%')))
-            """)
+        SELECT d FROM DeclaredSkillEntity d
+        JOIN SkillEntity s ON s.id = d.skillId
+        WHERE d.studentId = :studentId
+          AND LOWER(s.skillName) LIKE :searchPattern
+        """)
     Page<DeclaredSkillEntity> search(
-        @Param("studentId") UUID studentId, @Param("search") String search, Pageable pageable);
+        @Param("studentId") UUID studentId, @Param("searchPattern") String searchPattern, Pageable pageable);
 
     boolean existsByStudentIdAndSkillId(UUID studentId, UUID skillId);
 

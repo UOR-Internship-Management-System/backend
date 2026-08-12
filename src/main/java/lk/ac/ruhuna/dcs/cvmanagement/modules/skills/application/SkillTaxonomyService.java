@@ -82,7 +82,8 @@ public class SkillTaxonomyService {
     public PagedResponse<IndividualSkillResponse> listSkills(
         UUID clusterId, UUID categoryId, String search, Integer page, Integer size, String sort) {
         Pageable pageable = PageRequestFactory.build(page, size, sort);
-        Page<SkillEntity> result = skillRepository.search(clusterId, categoryId, search, pageable);
+        String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";   // <-- add this line
+        Page<SkillEntity> result = skillRepository.search(clusterId, categoryId, searchPattern, pageable); // <-- change search -> searchPattern here
         return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));
     }
 }

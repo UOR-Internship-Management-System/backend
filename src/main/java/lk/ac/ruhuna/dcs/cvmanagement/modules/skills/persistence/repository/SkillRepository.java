@@ -13,16 +13,16 @@ public interface SkillRepository extends JpaRepository<SkillEntity, UUID> {
 
     // Primary-category skills for a category, used for the flat /skill-taxonomy/skills list.
     @Query("""
-            SELECT s FROM SkillEntity s
-            JOIN SkillCategoryEntity c ON c.id = s.skillCategoryId
-            WHERE (:clusterId IS NULL OR c.coreClusterId = :clusterId)
-              AND (:categoryId IS NULL OR s.skillCategoryId = :categoryId)
-              AND (:search IS NULL OR LOWER(s.skillName) LIKE LOWER(CONCAT('%', :search, '%')))
-            """)
+        SELECT s FROM SkillEntity s
+        JOIN SkillCategoryEntity c ON c.id = s.skillCategoryId
+        WHERE (:clusterId IS NULL OR c.coreClusterId = :clusterId)
+          AND (:categoryId IS NULL OR s.skillCategoryId = :categoryId)
+          AND LOWER(s.skillName) LIKE :searchPattern
+        """)
     Page<SkillEntity> search(
         @Param("clusterId") UUID clusterId,
         @Param("categoryId") UUID categoryId,
-        @Param("search") String search,
+        @Param("searchPattern") String searchPattern,
         Pageable pageable);
 
     // Primary OR additionally-mapped skills for a category — used when assembling the nested tree,

@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.PreconditionFailedException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -79,6 +80,18 @@ public class GlobalExceptionHandler {
                 "An unexpected server error occurred.",
                 request,
                 null);
+    }
+
+    @ExceptionHandler(PreconditionFailedException.class)
+    ResponseEntity<ApiErrorResponse> handlePreconditionFailed(
+        PreconditionFailedException exception,
+        HttpServletRequest request) {
+        return build(
+            HttpStatus.PRECONDITION_FAILED,
+            ApiErrorCode.CONFLICT,
+            exception.getMessage(),
+            request,
+            null);
     }
 
     private ResponseEntity<ApiErrorResponse> build(

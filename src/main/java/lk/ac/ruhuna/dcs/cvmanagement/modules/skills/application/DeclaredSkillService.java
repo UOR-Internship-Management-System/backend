@@ -57,7 +57,8 @@ public class DeclaredSkillService {
     public PagedResponse<DeclaredSkillResponse> list(String search, Integer page, Integer size, String sort) {
         UUID studentId = currentStudentId();
         Pageable pageable = PageRequestFactory.build(page, size, sort);
-        Page<DeclaredSkillEntity> result = declaredSkillRepository.search(studentId, search, pageable);
+        String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";   // <-- add this line
+        Page<DeclaredSkillEntity> result = declaredSkillRepository.search(studentId, searchPattern, pageable); // <-- change search -> searchPattern here
         Page<DeclaredSkillResponse> mapped = result.map(entity -> mapper.toResponse(entity, skillName(entity.getSkillId())));
         return PagedResponse.of(mapped, PageRequestFactory.describeSort(sort));
     }
