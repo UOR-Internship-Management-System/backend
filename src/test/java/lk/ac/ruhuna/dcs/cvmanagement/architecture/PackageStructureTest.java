@@ -26,6 +26,7 @@ class PackageStructureTest {
 
     private static final List<String> MODULE_PACKAGES = List.of(
             "academics",
+            "admindashboard",
             "adminstudents",
             "auditlog",
             "auth",
