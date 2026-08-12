@@ -28,7 +28,7 @@ class ModuleDependencyRulesTest {
 
     /** Known module names under modules/. */
     private static final List<String> MODULE_NAMES = List.of(
-            "academics", "adminstudents", "auditlog", "auth", "companies",
+            "academics", "admindashboard", "adminstudents", "auditlog", "auth", "companies",
             "cv", "exports", "filtering", "health", "internships",
             "projects", "shortlists", "skills", "studentprofile", "verification");
 
@@ -157,8 +157,8 @@ class ModuleDependencyRulesTest {
     void futureModuleControllersDoNotExposeEndpoints() throws IOException {
         List<String> violations = new ArrayList<>();
 
-        // Sprint 2 activates complete authentication plus Student verification endpoints.
-        Set<String> activeModules = Set.of("health", "auth", "verification");
+        // Modules with approved HTTP endpoints in the current codebase.
+        Set<String> activeModules = Set.of("health", "auth", "verification", "studentprofile", "admindashboard");
 
         for (String moduleName : MODULE_NAMES) {
             if (activeModules.contains(moduleName)) {
