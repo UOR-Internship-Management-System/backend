@@ -104,7 +104,7 @@ class AdminDashboardApiIntegrationTest {
     @Test
     void anonymousUserCannotReadAdminDashboardMetrics() throws Exception {
         mockMvc.perform(get("/api/v1/admin/dashboard/metrics"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     private String loginAdmin(String email, String password) throws Exception {

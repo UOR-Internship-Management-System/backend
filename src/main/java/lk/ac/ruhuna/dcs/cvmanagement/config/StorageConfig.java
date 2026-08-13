@@ -1,8 +1,11 @@
 package lk.ac.ruhuna.dcs.cvmanagement.config;
 
-/**
- * Reserved Sprint boundary for file storage configuration.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
+import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.StorageProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Configuration;
+
+/** Enables strongly typed durable-storage configuration. */
+@Configuration
+@EnableConfigurationProperties(StorageProperties.class)
 public class StorageConfig {
 }
