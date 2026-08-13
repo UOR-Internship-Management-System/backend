@@ -1,8 +1,8 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.repository;
 
-/**
- * Spring Data repository for C: persistence.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public interface StudentAcademicSummaryRepository {
+import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.entity.StudentAcademicSummaryEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface StudentAcademicSummaryRepository extends JpaRepository<StudentAcademicSummaryEntity, UUID> {
 }

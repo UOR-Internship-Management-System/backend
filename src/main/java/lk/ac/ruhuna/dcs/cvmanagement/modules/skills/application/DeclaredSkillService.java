@@ -11,7 +11,6 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.entity.DeclaredS
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.entity.SkillEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.repository.DeclaredSkillRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.repository.SkillRepository;
-import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ConflictException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
@@ -28,19 +27,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class DeclaredSkillService {
 
     private final CurrentActorProvider currentActorProvider;
-    private final StudentRepository studentRepository;
+    private final StudentIdentityLookup studentIdentityLookup;
     private final DeclaredSkillRepository declaredSkillRepository;
     private final SkillRepository skillRepository;
     private final SkillMapper mapper;
 
     public DeclaredSkillService(
         CurrentActorProvider currentActorProvider,
-        StudentRepository studentRepository,
+        StudentIdentityLookup studentIdentityLookup,
         DeclaredSkillRepository declaredSkillRepository,
         SkillRepository skillRepository,
         SkillMapper mapper) {
         this.currentActorProvider = currentActorProvider;
-        this.studentRepository = studentRepository;
+        this.studentIdentityLookup = studentIdentityLookup;
         this.declaredSkillRepository = declaredSkillRepository;
         this.skillRepository = skillRepository;
         this.mapper = mapper;
@@ -49,9 +48,8 @@ public class DeclaredSkillService {
     private UUID currentStudentId() {
         var actor = currentActorProvider.currentActor()
             .orElseThrow(() -> new ForbiddenException("No authenticated Student context."));
-        return studentRepository.findByUserAccountId(actor.userId())
-            .orElseThrow(() -> new NotFoundException("Student record not found for the authenticated account."))
-            .getId();
+        return studentIdentityLookup.findStudentIdByUserAccountId(actor.userId())
+            .orElseThrow(() -> new NotFoundException("Student record not found for the authenticated account."));
     }
 
     @Transactional(readOnly = true)

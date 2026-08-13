@@ -14,6 +14,10 @@ spring:
     enabled: false
 
 app:
+  academics:
+    ledger:
+      processing:
+        worker-enabled: false
   security:
     jwt:
       issuer: cv-management-test
