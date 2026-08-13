@@ -28,13 +28,13 @@ class SecuritySmokeTest {
     @Test
     void protectedStudentPatternIsNotPublic() throws Exception {
         mockMvc.perform(get("/api/v1/student/profile"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     void protectedAdminPatternIsNotPublic() throws Exception {
         mockMvc.perform(get("/api/v1/admin/dashboard"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

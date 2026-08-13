@@ -26,3 +26,6 @@ replay_pid*
 
 target/
 .idea/
+
+# Local runtime file storage
+/data/

@@ -7,6 +7,12 @@ spring:
     time-zone: UTC
   datasource:
     driver-class-name: org.postgresql.Driver
+  servlet:
+    multipart:
+      # Keep the framework ceiling slightly above the frozen 5 MiB domain limit so the
+      # application can return the Academic Ledger-specific 413 contract at 5 MiB.
+      max-file-size: 6MB
+      max-request-size: 7MB
   jpa:
     open-in-view: false
     hibernate:
@@ -46,6 +52,12 @@ app:
       max-attempts: ${APP_AUTH_OTP_MAX_ATTEMPTS:3}
       resend-cooldown: ${APP_AUTH_OTP_RESEND_COOLDOWN:PT60S}
       max-resends: ${APP_AUTH_OTP_MAX_RESENDS:3}
+  academics:
+    ledger:
+      max-file-size-bytes: ${ACADEMIC_LEDGER_MAX_FILE_SIZE_BYTES:5242880}
+      retry-after-seconds: ${ACADEMIC_LEDGER_RETRY_AFTER_SECONDS:2}
+    storage:
+      root: ${ACADEMIC_LEDGER_STORAGE_ROOT:./data/academic-ledger}
   security:
     jwt:
       issuer: ${JWT_ISSUER:cv-management}
