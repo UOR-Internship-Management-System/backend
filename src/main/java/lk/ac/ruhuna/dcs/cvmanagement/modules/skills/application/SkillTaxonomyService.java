@@ -1,6 +1,7 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.skills.application;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.api.dto.response.IndividualSkillResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.api.dto.response.SkillCategoryResponse;
@@ -81,7 +82,8 @@ public class SkillTaxonomyService {
 
     public PagedResponse<IndividualSkillResponse> listSkills(
         UUID clusterId, UUID categoryId, String search, Integer page, Integer size, String sort) {
-        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        //Pageable pageable = PageRequestFactory.build(page, size, sort);
+        Pageable pageable = PageRequestFactory.build(page, size, sort, Map.of("name", "skillName"));
         String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";   // <-- add this line
         Page<SkillEntity> result = skillRepository.search(clusterId, categoryId, searchPattern, pageable); // <-- change search -> searchPattern here
         return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));

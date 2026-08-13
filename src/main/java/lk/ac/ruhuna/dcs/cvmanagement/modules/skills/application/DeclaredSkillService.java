@@ -1,6 +1,7 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.skills.application;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.api.dto.request.DeclaredSkillCreateRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.api.dto.request.DeclaredSkillUpdateRequest;
@@ -56,7 +57,8 @@ public class DeclaredSkillService {
     @Transactional(readOnly = true)
     public PagedResponse<DeclaredSkillResponse> list(String search, Integer page, Integer size, String sort) {
         UUID studentId = currentStudentId();
-        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        //Pageable pageable = PageRequestFactory.build(page, size, sort);
+        Pageable pageable = PageRequestFactory.build(page, size, sort, Map.of());
         String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";   // <-- add this line
         Page<DeclaredSkillEntity> result = declaredSkillRepository.search(studentId, searchPattern, pageable); // <-- change search -> searchPattern here
         Page<DeclaredSkillResponse> mapped = result.map(entity -> mapper.toResponse(entity, skillName(entity.getSkillId())));
