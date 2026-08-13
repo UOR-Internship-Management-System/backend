@@ -147,6 +147,17 @@ public final class AcademicLedgerErrors {
                 Map.of("transactionRolledBack", true));
     }
 
+    public static AcademicLedgerApiException academicDataUnavailable(Throwable cause) {
+        AcademicLedgerApiException exception = new AcademicLedgerApiException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "ACADEMIC_DATA_UNAVAILABLE",
+                "Academic data unavailable",
+                "Official academic data cannot be loaded at this time.",
+                Map.of());
+        exception.initCause(cause);
+        return exception;
+    }
+
     public static AcademicLedgerApiException storageUnavailable() {
         return new AcademicLedgerApiException(
                 HttpStatus.SERVICE_UNAVAILABLE,
