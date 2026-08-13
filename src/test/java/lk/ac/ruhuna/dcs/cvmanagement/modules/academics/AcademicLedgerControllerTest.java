@@ -5,9 +5,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.request.AcademicLedgerCommitRequest;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerCommitResponse;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.AcademicLedgerController;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerUploadDetailResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerCommitService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerReviewService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerUploadService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProperties;
@@ -24,7 +27,8 @@ class AcademicLedgerControllerTest {
         AcademicLedgerUploadService service = mock(AcademicLedgerUploadService.class);
         AcademicLedgerProperties properties = new AcademicLedgerProperties(5_242_880L, 2);
         AcademicLedgerReviewService reviewService = mock(AcademicLedgerReviewService.class);
-        AcademicLedgerController controller = new AcademicLedgerController(service, reviewService, properties);
+        AcademicLedgerCommitService commitService = mock(AcademicLedgerCommitService.class);
+        AcademicLedgerController controller = new AcademicLedgerController(service, commitService, reviewService, properties);
         UUID uploadId = UUID.randomUUID();
         MockMultipartFile file = new MockMultipartFile(
                 "file", "ledger.csv", "text/csv", "data".getBytes());
@@ -52,5 +56,22 @@ class AcademicLedgerControllerTest {
                 .hasToString("/api/v1/admin/academic-ledger/uploads/" + uploadId);
         assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("2");
         assertThat(response.getBody()).isEqualTo(detail);
+    }
+
+    @Test
+    void commitReturnsCanonicalV16Response() {
+        AcademicLedgerUploadService uploadService = mock(AcademicLedgerUploadService.class);
+        AcademicLedgerReviewService reviewService = mock(AcademicLedgerReviewService.class);
+        AcademicLedgerCommitService commitService = mock(AcademicLedgerCommitService.class);
+        AcademicLedgerController controller = new AcademicLedgerController(
+                uploadService, commitService, reviewService, new AcademicLedgerProperties(5_242_880L, 2));
+        UUID uploadId = UUID.randomUUID();
+        var expected = new AcademicLedgerCommitResponse(
+                uploadId, "COMMITTED", 12, 3, 3, OffsetDateTime.parse("2026-08-13T01:00:00Z"));
+        when(commitService.commit(uploadId)).thenReturn(expected);
+
+        var response = controller.commit(uploadId, new AcademicLedgerCommitRequest(true));
+
+        assertThat(response).isEqualTo(expected);
     }
 }

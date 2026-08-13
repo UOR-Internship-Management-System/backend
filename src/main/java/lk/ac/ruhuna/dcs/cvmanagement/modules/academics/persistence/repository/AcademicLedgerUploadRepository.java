@@ -87,6 +87,20 @@ public interface AcademicLedgerUploadRepository extends JpaRepository<AcademicLe
     Optional<AcademicLedgerUploadEntity> findOneStaleValidationForUpdateSkipLocked(
             @Param("staleBefore") OffsetDateTime staleBefore);
 
+    @Query(
+            value = """
+            SELECT *
+            FROM academic.academic_ledger_upload
+            WHERE upload_status = 'COMMITTING'
+              AND updated_at < :staleBefore
+            ORDER BY updated_at ASC, academic_ledger_upload_id ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+            """,
+            nativeQuery = true)
+    Optional<AcademicLedgerUploadEntity> findOneStaleCommittingForUpdateSkipLocked(
+            @Param("staleBefore") OffsetDateTime staleBefore);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
             value = """

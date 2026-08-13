@@ -1,11 +1,15 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api;
 
 import java.net.URI;
+import jakarta.validation.Valid;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.request.AcademicLedgerCommitRequest;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerCommitResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerStagedRowResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerUploadDetailResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerUploadSummaryResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerValidationResultResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerCommitService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerReviewService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerUploadService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProperties;
@@ -17,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -29,14 +34,17 @@ import org.springframework.web.multipart.MultipartFile;
 public class AcademicLedgerController {
 
     private final AcademicLedgerUploadService uploadService;
+    private final AcademicLedgerCommitService commitService;
     private final AcademicLedgerReviewService reviewService;
     private final AcademicLedgerProperties properties;
 
     public AcademicLedgerController(
             AcademicLedgerUploadService uploadService,
+            AcademicLedgerCommitService commitService,
             AcademicLedgerReviewService reviewService,
             AcademicLedgerProperties properties) {
         this.uploadService = uploadService;
+        this.commitService = commitService;
         this.reviewService = reviewService;
         this.properties = properties;
     }
@@ -66,6 +74,12 @@ public class AcademicLedgerController {
     @GetMapping(value = "/{uploadId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public AcademicLedgerUploadDetailResponse get(@PathVariable UUID uploadId) {
         return uploadService.getUpload(uploadId);
+    }
+
+    @PostMapping(value = "/{uploadId}/commit", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public AcademicLedgerCommitResponse commit(
+            @PathVariable UUID uploadId, @Valid @RequestBody AcademicLedgerCommitRequest request) {
+        return commitService.commit(uploadId);
     }
 
     @GetMapping(value = "/{uploadId}/staged-rows", produces = MediaType.APPLICATION_JSON_VALUE)

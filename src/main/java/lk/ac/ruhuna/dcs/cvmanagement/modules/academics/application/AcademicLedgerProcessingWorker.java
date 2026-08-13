@@ -27,6 +27,7 @@ class AcademicLedgerProcessingWorker {
     private final AcademicLedgerProcessingStateService stateService;
     private final AcademicLedgerProcessingService processingService;
     private final AcademicLedgerValidationService validationService;
+    private final AcademicLedgerCommitClaimService commitClaimService;
     private final AcademicLedgerProcessingProperties properties;
     private final Clock clock;
 
@@ -34,11 +35,13 @@ class AcademicLedgerProcessingWorker {
             AcademicLedgerProcessingStateService stateService,
             AcademicLedgerProcessingService processingService,
             AcademicLedgerValidationService validationService,
+            AcademicLedgerCommitClaimService commitClaimService,
             AcademicLedgerProcessingProperties properties,
             Clock clock) {
         this.stateService = stateService;
         this.processingService = processingService;
         this.validationService = validationService;
+        this.commitClaimService = commitClaimService;
         this.properties = properties;
         this.clock = clock;
     }
@@ -66,5 +69,6 @@ class AcademicLedgerProcessingWorker {
                 clock.instant().minus(properties.staleThreshold()), ZoneOffset.UTC);
         stateService.recoverOneStaleProcessing(staleBefore);
         validationService.recoverOneStaleValidation(staleBefore);
+        commitClaimService.recoverOneStaleCommit(staleBefore);
     }
 }

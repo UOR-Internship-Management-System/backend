@@ -13,6 +13,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface AcademicLedgerStagingRowRepository extends JpaRepository<AcademicLedgerStagingRowEntity, UUID> {
 
+    List<AcademicLedgerStagingRowEntity> findAllByAcademicLedgerUploadIdOrderByRowNumberAsc(UUID academicLedgerUploadId);
+
     @Query(
             """
             select r

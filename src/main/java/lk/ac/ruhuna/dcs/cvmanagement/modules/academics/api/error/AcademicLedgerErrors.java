@@ -102,6 +102,51 @@ public final class AcademicLedgerErrors {
                 Map.of());
     }
 
+    public static AcademicLedgerApiException notReadyToCommit(String currentStatus) {
+        return new AcademicLedgerApiException(
+                HttpStatus.CONFLICT,
+                "LEDGER_NOT_READY_TO_COMMIT",
+                "Academic ledger is not ready to commit",
+                "Only a READY_TO_COMMIT upload batch can be committed.",
+                Map.of("currentStatus", currentStatus));
+    }
+
+    public static AcademicLedgerApiException alreadyCommitted() {
+        return new AcademicLedgerApiException(
+                HttpStatus.CONFLICT,
+                "LEDGER_ALREADY_COMMITTED",
+                "Academic ledger is already committed",
+                "The upload batch has already been committed and cannot be committed again.",
+                Map.of("currentStatus", "COMMITTED"));
+    }
+
+    public static AcademicLedgerApiException commitConflict() {
+        return new AcademicLedgerApiException(
+                HttpStatus.CONFLICT,
+                "LEDGER_COMMIT_CONFLICT",
+                "Academic ledger commit conflict",
+                "Another request is currently committing this upload batch.",
+                Map.of("currentStatus", "COMMITTING"));
+    }
+
+    public static AcademicLedgerApiException validationFailed(int invalidRows) {
+        return new AcademicLedgerApiException(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "LEDGER_VALIDATION_FAILED",
+                "Academic ledger validation failed",
+                "Resolve the invalid rows in the source file and upload a corrected batch.",
+                Map.of("invalidRows", Math.max(invalidRows, 0)));
+    }
+
+    public static AcademicLedgerApiException commitFailed() {
+        return new AcademicLedgerApiException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "LEDGER_COMMIT_FAILED",
+                "Academic ledger commit failed",
+                "No academic records were committed. The batch remains ready for a safe retry.",
+                Map.of("transactionRolledBack", true));
+    }
+
     public static AcademicLedgerApiException storageUnavailable() {
         return new AcademicLedgerApiException(
                 HttpStatus.SERVICE_UNAVAILABLE,

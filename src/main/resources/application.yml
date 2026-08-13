@@ -64,6 +64,10 @@ app:
         stale-threshold: ${ACADEMIC_LEDGER_STALE_THRESHOLD:PT10M}
     storage:
       root: ${ACADEMIC_LEDGER_STORAGE_ROOT:./data/academic-ledger}
+    gpa:
+      # Centralized because the handbooks define the weighted formula but not the final tie-breaking mode.
+      # Override through ACADEMIC_GPA_ROUNDING_MODE if institutional policy requires a different mode.
+      rounding-mode: ${ACADEMIC_GPA_ROUNDING_MODE:HALF_UP}
   security:
     jwt:
       issuer: ${JWT_ISSUER:cv-management}
