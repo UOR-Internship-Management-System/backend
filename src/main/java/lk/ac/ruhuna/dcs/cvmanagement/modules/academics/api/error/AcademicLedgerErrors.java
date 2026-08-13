@@ -93,6 +93,15 @@ public final class AcademicLedgerErrors {
                 Map.of());
     }
 
+    public static AcademicLedgerApiException notReady(String message) {
+        return new AcademicLedgerApiException(
+                HttpStatus.CONFLICT,
+                "LEDGER_NOT_READY",
+                "Academic ledger is not ready",
+                message,
+                Map.of());
+    }
+
     public static AcademicLedgerApiException storageUnavailable() {
         return new AcademicLedgerApiException(
                 HttpStatus.SERVICE_UNAVAILABLE,

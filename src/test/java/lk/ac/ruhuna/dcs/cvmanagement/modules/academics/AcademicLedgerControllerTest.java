@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.AcademicLedgerController;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerUploadDetailResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerReviewService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerUploadService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProperties;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.domain.AcademicLedgerUploadStatus;
@@ -22,7 +23,8 @@ class AcademicLedgerControllerTest {
     void acceptedUploadReturnsCanonicalPollingHeadersAndReceivedState() {
         AcademicLedgerUploadService service = mock(AcademicLedgerUploadService.class);
         AcademicLedgerProperties properties = new AcademicLedgerProperties(5_242_880L, 2);
-        AcademicLedgerController controller = new AcademicLedgerController(service, properties);
+        AcademicLedgerReviewService reviewService = mock(AcademicLedgerReviewService.class);
+        AcademicLedgerController controller = new AcademicLedgerController(service, reviewService, properties);
         UUID uploadId = UUID.randomUUID();
         MockMultipartFile file = new MockMultipartFile(
                 "file", "ledger.csv", "text/csv", "data".getBytes());

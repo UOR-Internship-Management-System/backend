@@ -1,5 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -11,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 public interface SubjectRepository extends JpaRepository<SubjectEntity, UUID> {
 
     Optional<SubjectEntity> findByCatalogVersionAndCourseCode(String catalogVersion, String courseCode);
+
+    List<SubjectEntity> findByCourseCodeInAndActiveTrue(Collection<String> courseCodes);
 
     @Query("""
             select s

@@ -1,5 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.entity.OfficialStudentGradeEntity;
@@ -11,4 +12,6 @@ public interface OfficialStudentGradeRepository extends JpaRepository<OfficialSt
             UUID studentId, UUID subjectId, String semester, String academicYear, short attemptNumber);
 
     List<OfficialStudentGradeEntity> findByStudentId(UUID studentId);
+
+    List<OfficialStudentGradeEntity> findByStudentIdIn(Collection<UUID> studentIds);
 }

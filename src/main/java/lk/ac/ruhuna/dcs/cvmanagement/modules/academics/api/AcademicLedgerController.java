@@ -2,8 +2,11 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api;
 
 import java.net.URI;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerStagedRowResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerUploadDetailResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerUploadSummaryResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.dto.response.AcademicLedgerValidationResultResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerReviewService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerUploadService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProperties;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
@@ -20,18 +23,21 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-/** Admin Academic Ledger upload acceptance, history, and polling endpoints. */
+/** Admin Academic Ledger upload, polling, staged-review, and validation-result endpoints. */
 @RestController
 @RequestMapping(ApiPaths.ADMIN_ACADEMIC_LEDGER_UPLOADS)
 public class AcademicLedgerController {
 
     private final AcademicLedgerUploadService uploadService;
+    private final AcademicLedgerReviewService reviewService;
     private final AcademicLedgerProperties properties;
 
     public AcademicLedgerController(
             AcademicLedgerUploadService uploadService,
+            AcademicLedgerReviewService reviewService,
             AcademicLedgerProperties properties) {
         this.uploadService = uploadService;
+        this.reviewService = reviewService;
         this.properties = properties;
     }
 
@@ -60,5 +66,21 @@ public class AcademicLedgerController {
     @GetMapping(value = "/{uploadId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public AcademicLedgerUploadDetailResponse get(@PathVariable UUID uploadId) {
         return uploadService.getUpload(uploadId);
+    }
+
+    @GetMapping(value = "/{uploadId}/staged-rows", produces = MediaType.APPLICATION_JSON_VALUE)
+    public PagedResponse<AcademicLedgerStagedRowResponse> stagedRows(
+            @PathVariable UUID uploadId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String validationStatus) {
+        return reviewService.listStagedRows(uploadId, page, size, sort, search, validationStatus);
+    }
+
+    @GetMapping(value = "/{uploadId}/validation-results", produces = MediaType.APPLICATION_JSON_VALUE)
+    public AcademicLedgerValidationResultResponse validationResults(@PathVariable UUID uploadId) {
+        return reviewService.getValidation(uploadId);
     }
 }

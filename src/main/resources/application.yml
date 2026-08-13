@@ -56,6 +56,12 @@ app:
     ledger:
       max-file-size-bytes: ${ACADEMIC_LEDGER_MAX_FILE_SIZE_BYTES:5242880}
       retry-after-seconds: ${ACADEMIC_LEDGER_RETRY_AFTER_SECONDS:2}
+      processing:
+        worker-enabled: ${ACADEMIC_LEDGER_WORKER_ENABLED:true}
+        worker-poll-delay-ms: ${ACADEMIC_LEDGER_WORKER_POLL_DELAY_MS:2000}
+        staging-batch-size: ${ACADEMIC_LEDGER_STAGING_BATCH_SIZE:500}
+        max-uploads-per-poll: ${ACADEMIC_LEDGER_MAX_UPLOADS_PER_POLL:2}
+        stale-threshold: ${ACADEMIC_LEDGER_STALE_THRESHOLD:PT10M}
     storage:
       root: ${ACADEMIC_LEDGER_STORAGE_ROOT:./data/academic-ledger}
   security:
