@@ -1,7 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api;
 
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.ActivityRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.AwardRequest;
@@ -17,6 +16,9 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.Stu
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.WorkExperienceResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.application.StudentProfileService;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.http.IfMatchSupport;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -45,8 +47,12 @@ public class StudentProfileController {
 
     // contact links
     @GetMapping("/contact-links")
-    public List<ContactLinkResponse> listContactLinks() {
-        return service.listContactLinks();
+    public PagedResponse<ContactLinkResponse> listContactLinks(
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer size,
+        @RequestParam(required = false) String sort) {
+        return service.listContactLinks(search, page, size, sort);
     }
 
     @PostMapping("/contact-links")
@@ -57,20 +63,29 @@ public class StudentProfileController {
 
     @PatchMapping("/contact-links/{contactLinkId}")
     public ContactLinkResponse updateContactLink(
-        @PathVariable UUID contactLinkId, @Valid @RequestBody ContactLinkRequest request) {
-        return service.updateContactLink(contactLinkId, request);
+        @PathVariable UUID contactLinkId,
+        @Valid @RequestBody ContactLinkRequest request,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        return service.updateContactLink(contactLinkId, request, IfMatchSupport.parseVersion(ifMatch));
     }
 
     @DeleteMapping("/contact-links/{contactLinkId}")
-    public ResponseEntity<Void> deleteContactLink(@PathVariable UUID contactLinkId) {
-        service.deleteContactLink(contactLinkId);
+    public ResponseEntity<Void> deleteContactLink(
+        @PathVariable UUID contactLinkId,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        service.deleteContactLink(contactLinkId, IfMatchSupport.parseVersion(ifMatch));
         return ResponseEntity.noContent().build();
     }
 
     // certificates
+
     @GetMapping("/certificates")
-    public List<CertificateResponse> listCertificates() {
-        return service.listCertificates();
+    public PagedResponse<CertificateResponse> listCertificates(
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer size,
+        @RequestParam(required = false) String sort) {
+        return service.listCertificates(search, page, size, sort);
     }
 
     @PostMapping("/certificates")
@@ -81,20 +96,29 @@ public class StudentProfileController {
 
     @PatchMapping("/certificates/{certificateId}")
     public CertificateResponse updateCertificate(
-        @PathVariable UUID certificateId, @Valid @RequestBody CertificateRequest request) {
-        return service.updateCertificate(certificateId, request);
+        @PathVariable UUID certificateId,
+        @Valid @RequestBody CertificateRequest request,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        return service.updateCertificate(certificateId, request, IfMatchSupport.parseVersion(ifMatch));
     }
 
     @DeleteMapping("/certificates/{certificateId}")
-    public ResponseEntity<Void> deleteCertificate(@PathVariable UUID certificateId) {
-        service.deleteCertificate(certificateId);
+    public ResponseEntity<Void> deleteCertificate(
+        @PathVariable UUID certificateId,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        service.deleteCertificate(certificateId, IfMatchSupport.parseVersion(ifMatch));
         return ResponseEntity.noContent().build();
     }
 
     // awards
+
     @GetMapping("/awards")
-    public List<AwardResponse> listAwards() {
-        return service.listAwards();
+    public PagedResponse<AwardResponse> listAwards(
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer size,
+        @RequestParam(required = false) String sort) {
+        return service.listAwards(search, page, size, sort);
     }
 
     @PostMapping("/awards")
@@ -104,20 +128,30 @@ public class StudentProfileController {
     }
 
     @PatchMapping("/awards/{awardId}")
-    public AwardResponse updateAward(@PathVariable UUID awardId, @Valid @RequestBody AwardRequest request) {
-        return service.updateAward(awardId, request);
+    public AwardResponse updateAward(
+        @PathVariable UUID awardId,
+        @Valid @RequestBody AwardRequest request,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        return service.updateAward(awardId, request, IfMatchSupport.parseVersion(ifMatch));
     }
 
     @DeleteMapping("/awards/{awardId}")
-    public ResponseEntity<Void> deleteAward(@PathVariable UUID awardId) {
-        service.deleteAward(awardId);
+    public ResponseEntity<Void> deleteAward(
+        @PathVariable UUID awardId,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        service.deleteAward(awardId, IfMatchSupport.parseVersion(ifMatch));
         return ResponseEntity.noContent().build();
     }
 
     // activities
+
     @GetMapping("/activities")
-    public List<ActivityResponse> listActivities() {
-        return service.listActivities();
+    public PagedResponse<ActivityResponse> listActivities(
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer size,
+        @RequestParam(required = false) String sort) {
+        return service.listActivities(search, page, size, sort);
     }
 
     @PostMapping("/activities")
@@ -128,20 +162,28 @@ public class StudentProfileController {
 
     @PatchMapping("/activities/{activityId}")
     public ActivityResponse updateActivity(
-        @PathVariable UUID activityId, @Valid @RequestBody ActivityRequest request) {
-        return service.updateActivity(activityId, request);
+        @PathVariable UUID activityId,
+        @Valid @RequestBody ActivityRequest request,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        return service.updateActivity(activityId, request, IfMatchSupport.parseVersion(ifMatch));
     }
 
     @DeleteMapping("/activities/{activityId}")
-    public ResponseEntity<Void> deleteActivity(@PathVariable UUID activityId) {
-        service.deleteActivity(activityId);
+    public ResponseEntity<Void> deleteActivity(
+        @PathVariable UUID activityId,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        service.deleteActivity(activityId, IfMatchSupport.parseVersion(ifMatch));
         return ResponseEntity.noContent().build();
     }
 
     // work experience
     @GetMapping("/experience")
-    public List<WorkExperienceResponse> listExperience() {
-        return service.listExperience();
+    public PagedResponse<WorkExperienceResponse> listExperience(
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer size,
+        @RequestParam(required = false) String sort) {
+        return service.listExperience(search, page, size, sort);
     }
 
     @PostMapping("/experience")
@@ -152,13 +194,17 @@ public class StudentProfileController {
 
     @PatchMapping("/experience/{experienceId}")
     public WorkExperienceResponse updateExperience(
-        @PathVariable UUID experienceId, @Valid @RequestBody WorkExperienceRequest request) {
-        return service.updateExperience(experienceId, request);
+        @PathVariable UUID experienceId,
+        @Valid @RequestBody WorkExperienceRequest request,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        return service.updateExperience(experienceId, request, IfMatchSupport.parseVersion(ifMatch));
     }
 
     @DeleteMapping("/experience/{experienceId}")
-    public ResponseEntity<Void> deleteExperience(@PathVariable UUID experienceId) {
-        service.deleteExperience(experienceId);
+    public ResponseEntity<Void> deleteExperience(
+        @PathVariable UUID experienceId,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        service.deleteExperience(experienceId, IfMatchSupport.parseVersion(ifMatch));
         return ResponseEntity.noContent().build();
     }
 }
