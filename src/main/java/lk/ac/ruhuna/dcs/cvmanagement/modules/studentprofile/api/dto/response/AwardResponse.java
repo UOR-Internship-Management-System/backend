@@ -1,6 +1,7 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record AwardResponse(
@@ -9,5 +10,8 @@ public record AwardResponse(
     String issuer,
     LocalDate awardDate,
     String description,
-    boolean cvInclude) {
+    boolean cvInclude,
+    long version,
+    OffsetDateTime createdAt,
+    OffsetDateTime updatedAt) {
 }

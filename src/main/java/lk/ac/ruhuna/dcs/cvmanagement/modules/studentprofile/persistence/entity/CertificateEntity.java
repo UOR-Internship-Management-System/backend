@@ -1,9 +1,7 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
+
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -44,4 +42,8 @@ public class CertificateEntity {
 
     @Column(name = "updated_at")
     private OffsetDateTime updatedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

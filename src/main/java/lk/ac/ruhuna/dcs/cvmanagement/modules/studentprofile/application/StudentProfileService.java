@@ -1,7 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.application;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.ActivityRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.AwardRequest;
@@ -33,8 +32,13 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.reposito
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.WorkExperienceRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.PreconditionFailedException;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.PageRequestFactory;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,7 +107,7 @@ public class StudentProfileService {
     public StudentProfileResponse getMyProfile() {
         StudentEntity student = currentStudent();
         StudentProfileEntity profile = getOrCreateProfile(student.getId());
-        return mapper.toResponse(student, profile, null); // wire real photo URL once file module exists
+        return mapper.toResponse(student, profile);
     }
 
     @Transactional
@@ -111,33 +115,28 @@ public class StudentProfileService {
         StudentEntity student = currentStudent();
         StudentProfileEntity profile = getOrCreateProfile(student.getId());
 
-        if (request.fullName() != null) {
-            profile.setDisplayName(request.fullName());
-        }
-        if (request.summary() != null) {
-            profile.setSummary(request.summary());
-        }
-        if (request.phone() != null) {
-            profile.setPhone(request.phone());
-        }
-        if (request.profilePhotoFileId() != null) {
-            profile.setProfilePhotoFileId(request.profilePhotoFileId());
-        }
+        if (request.fullName() != null) profile.setDisplayName(request.fullName());
+        if (request.personalEmail() != null) profile.setPersonalEmail(request.personalEmail());
+        if (request.headline() != null) profile.setHeadline(request.headline());
+        if (request.summary() != null) profile.setSummary(request.summary());
+        if (request.phone() != null) profile.setPhone(request.phone());
+        if (request.location() != null) profile.setLocation(request.location());
         profile.setUpdatedAt(OffsetDateTime.now());
-        StudentProfileEntity saved = studentProfileRepository.save(profile);
 
+        StudentProfileEntity saved = studentProfileRepository.save(profile);
         cvFreshnessUpdatePort.markStale(student.getId(), "studentprofile");
-        return mapper.toResponse(student, saved, null);
+        return mapper.toResponse(student, saved);
     }
 
     // ---- contact links ----
 
     @Transactional(readOnly = true)
-    public List<ContactLinkResponse> listContactLinks() {
+    public PagedResponse<ContactLinkResponse> listContactLinks(String search, Integer page, Integer size, String sort) {
         UUID studentId = currentStudent().getId();
-        return contactLinkRepository.findByStudentIdOrderByDisplayOrderAsc(studentId).stream()
-            .map(mapper::toResponse)
-            .toList();
+        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";
+        Page<ContactLinkEntity> result = contactLinkRepository.search(studentId, searchPattern, pageable);
+        return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));
     }
 
     @Transactional
@@ -159,20 +158,19 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public ContactLinkResponse updateContactLink(UUID contactLinkId, ContactLinkRequest request) {
+    public ContactLinkResponse updateContactLink(UUID contactLinkId, ContactLinkRequest request, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         ContactLinkEntity entity = contactLinkRepository.findById(contactLinkId)
             .orElseThrow(() -> new NotFoundException("Contact link not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Contact link has been modified since it was last read.");
+        }
 
         entity.setLabel(request.label());
         entity.setUrl(request.url());
-        if (request.displayOrder() != null) {
-            entity.setDisplayOrder(request.displayOrder());
-        }
-        if (request.cvInclude() != null) {
-            entity.setCvInclude(request.cvInclude());
-        }
+        if (request.displayOrder() != null) entity.setDisplayOrder(request.displayOrder());
+        if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         ContactLinkEntity saved = contactLinkRepository.save(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
@@ -180,11 +178,14 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public void deleteContactLink(UUID contactLinkId) {
+    public void deleteContactLink(UUID contactLinkId, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         ContactLinkEntity entity = contactLinkRepository.findById(contactLinkId)
             .orElseThrow(() -> new NotFoundException("Contact link not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Contact link has been modified since it was last read.");
+        }
         contactLinkRepository.delete(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
     }
@@ -192,11 +193,12 @@ public class StudentProfileService {
     // ---- certificates ----
 
     @Transactional(readOnly = true)
-    public List<CertificateResponse> listCertificates() {
+    public PagedResponse<CertificateResponse> listCertificates(String search, Integer page, Integer size, String sort) {
         UUID studentId = currentStudent().getId();
-        return certificateRepository.findByStudentIdOrderByCreatedAtDesc(studentId).stream()
-            .map(mapper::toResponse)
-            .toList();
+        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";
+        Page<CertificateEntity> result = certificateRepository.search(studentId, searchPattern, pageable);
+        return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));
     }
 
     @Transactional
@@ -219,19 +221,20 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public CertificateResponse updateCertificate(UUID certificateId, CertificateRequest request) {
+    public CertificateResponse updateCertificate(UUID certificateId, CertificateRequest request, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         CertificateEntity entity = certificateRepository.findById(certificateId)
             .orElseThrow(() -> new NotFoundException("Certificate not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Certificate has been modified since it was last read.");
+        }
 
         entity.setTitle(request.title());
         entity.setIssuer(request.issuer());
         entity.setIssueDate(request.issueDate());
         entity.setCredentialUrl(request.credentialUrl());
-        if (request.cvInclude() != null) {
-            entity.setCvInclude(request.cvInclude());
-        }
+        if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         CertificateEntity saved = certificateRepository.save(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
@@ -239,11 +242,14 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public void deleteCertificate(UUID certificateId) {
+    public void deleteCertificate(UUID certificateId, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         CertificateEntity entity = certificateRepository.findById(certificateId)
             .orElseThrow(() -> new NotFoundException("Certificate not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Certificate has been modified since it was last read.");
+        }
         certificateRepository.delete(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
     }
@@ -251,11 +257,12 @@ public class StudentProfileService {
     // ---- awards ----
 
     @Transactional(readOnly = true)
-    public List<AwardResponse> listAwards() {
+    public PagedResponse<AwardResponse> listAwards(String search, Integer page, Integer size, String sort) {
         UUID studentId = currentStudent().getId();
-        return awardRepository.findByStudentIdOrderByCreatedAtDesc(studentId).stream()
-            .map(mapper::toResponse)
-            .toList();
+        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";
+        Page<AwardEntity> result = awardRepository.search(studentId, searchPattern, pageable);
+        return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));
     }
 
     @Transactional
@@ -278,19 +285,20 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public AwardResponse updateAward(UUID awardId, AwardRequest request) {
+    public AwardResponse updateAward(UUID awardId, AwardRequest request, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         AwardEntity entity = awardRepository.findById(awardId)
             .orElseThrow(() -> new NotFoundException("Award not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Award has been modified since it was last read.");
+        }
 
         entity.setTitle(request.title());
         entity.setIssuer(request.issuer());
         entity.setAwardDate(request.awardDate());
         entity.setDescription(request.description());
-        if (request.cvInclude() != null) {
-            entity.setCvInclude(request.cvInclude());
-        }
+        if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         AwardEntity saved = awardRepository.save(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
@@ -298,11 +306,14 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public void deleteAward(UUID awardId) {
+    public void deleteAward(UUID awardId, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         AwardEntity entity = awardRepository.findById(awardId)
             .orElseThrow(() -> new NotFoundException("Award not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Award has been modified since it was last read.");
+        }
         awardRepository.delete(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
     }
@@ -310,11 +321,12 @@ public class StudentProfileService {
     // ---- activities ----
 
     @Transactional(readOnly = true)
-    public List<ActivityResponse> listActivities() {
+    public PagedResponse<ActivityResponse> listActivities(String search, Integer page, Integer size, String sort) {
         UUID studentId = currentStudent().getId();
-        return activityRepository.findByStudentIdOrderByCreatedAtDesc(studentId).stream()
-            .map(mapper::toResponse)
-            .toList();
+        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";
+        Page<ActivityEntity> result = activityRepository.search(studentId, searchPattern, pageable);
+        return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));
     }
 
     @Transactional
@@ -338,20 +350,21 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public ActivityResponse updateActivity(UUID activityId, ActivityRequest request) {
+    public ActivityResponse updateActivity(UUID activityId, ActivityRequest request, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         ActivityEntity entity = activityRepository.findById(activityId)
             .orElseThrow(() -> new NotFoundException("Activity not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Activity has been modified since it was last read.");
+        }
 
         entity.setActivityName(request.activityName());
         entity.setRoleTitle(request.roleTitle());
         entity.setStartDate(request.startDate());
         entity.setEndDate(request.endDate());
         entity.setDescription(request.description());
-        if (request.cvInclude() != null) {
-            entity.setCvInclude(request.cvInclude());
-        }
+        if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         ActivityEntity saved = activityRepository.save(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
@@ -359,11 +372,14 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public void deleteActivity(UUID activityId) {
+    public void deleteActivity(UUID activityId, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         ActivityEntity entity = activityRepository.findById(activityId)
             .orElseThrow(() -> new NotFoundException("Activity not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Activity has been modified since it was last read.");
+        }
         activityRepository.delete(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
     }
@@ -371,11 +387,12 @@ public class StudentProfileService {
     // ---- work experience ----
 
     @Transactional(readOnly = true)
-    public List<WorkExperienceResponse> listExperience() {
+    public PagedResponse<WorkExperienceResponse> listExperience(String search, Integer page, Integer size, String sort) {
         UUID studentId = currentStudent().getId();
-        return workExperienceRepository.findByStudentIdOrderByCreatedAtDesc(studentId).stream()
-            .map(mapper::toResponse)
-            .toList();
+        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";
+        Page<WorkExperienceEntity> result = workExperienceRepository.search(studentId, searchPattern, pageable);
+        return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));
     }
 
     @Transactional
@@ -386,8 +403,10 @@ public class StudentProfileService {
         entity.setStudentId(studentId);
         entity.setOrganization(request.organization());
         entity.setPositionTitle(request.positionTitle());
+        entity.setLocation(request.location());
         entity.setStartDate(request.startDate());
         entity.setEndDate(request.endDate());
+        entity.setCurrentRole(request.currentRole());
         entity.setDescription(request.description());
         entity.setCvInclude(request.cvInclude() == null || request.cvInclude());
         OffsetDateTime now = OffsetDateTime.now();
@@ -399,20 +418,23 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public WorkExperienceResponse updateExperience(UUID experienceId, WorkExperienceRequest request) {
+    public WorkExperienceResponse updateExperience(UUID experienceId, WorkExperienceRequest request, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         WorkExperienceEntity entity = workExperienceRepository.findById(experienceId)
             .orElseThrow(() -> new NotFoundException("Work experience not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Work experience has been modified since it was last read.");
+        }
 
         entity.setOrganization(request.organization());
         entity.setPositionTitle(request.positionTitle());
+        entity.setLocation(request.location());
         entity.setStartDate(request.startDate());
         entity.setEndDate(request.endDate());
+        entity.setCurrentRole(request.currentRole());
         entity.setDescription(request.description());
-        if (request.cvInclude() != null) {
-            entity.setCvInclude(request.cvInclude());
-        }
+        if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         WorkExperienceEntity saved = workExperienceRepository.save(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
@@ -420,11 +442,14 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public void deleteExperience(UUID experienceId) {
+    public void deleteExperience(UUID experienceId, long ifMatchVersion) {
         UUID studentId = currentStudent().getId();
         WorkExperienceEntity entity = workExperienceRepository.findById(experienceId)
             .orElseThrow(() -> new NotFoundException("Work experience not found."));
         assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Work experience has been modified since it was last read.");
+        }
         workExperienceRepository.delete(entity);
         cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
     }
