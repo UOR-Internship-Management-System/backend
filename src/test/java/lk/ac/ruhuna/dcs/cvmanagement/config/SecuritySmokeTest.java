@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -35,6 +36,23 @@ class SecuritySmokeTest {
     void protectedAdminPatternIsNotPublic() throws Exception {
         mockMvc.perform(get("/api/v1/admin/dashboard"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void academicLedgerAdminRoutesRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/academic-ledger/uploads"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/academic-records"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    void studentRoleCannotAccessAcademicLedgerAdminRoutes() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/academic-ledger/uploads"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/academic-records"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
