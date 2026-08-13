@@ -80,7 +80,7 @@ class FlywayMigrationTest {
 
         jdbc.update("""
                 INSERT INTO public.user_accounts (id, university_email, account_status)
-                VALUES ('10000000-0000-0000-0000-000000000001', 'admin@dcs.ruh.ac.lk', 'ACTIVE')
+                VALUES ('10000000-0000-0000-0000-000000000001', 'flyway.ledger.admin@dcs.ruh.ac.lk', 'ACTIVE')
                 """);
 
         jdbc.update("""

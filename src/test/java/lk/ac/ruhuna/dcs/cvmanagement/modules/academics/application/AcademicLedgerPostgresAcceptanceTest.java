@@ -96,7 +96,7 @@ class AcademicLedgerPostgresAcceptanceTest {
                 INSERT INTO public.eligible_students(
                     id, index_number, university_email, full_name, academic_level, is_active
                 ) VALUES (?, 'SC/2025/09999', 'ledger.acceptance.student@dcs.ruh.ac.lk',
-                    'Ledger Acceptance Student', 2, TRUE)
+                    'Ledger Acceptance Student', 3, TRUE)
                 """,
                 STUDENT_ID);
         insertSubject(SUBJECT_ONE_ID, "CSC2113", "Data Communication and Computer Networks");
