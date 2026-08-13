@@ -9,6 +9,7 @@ public final class ApiPaths {
     public static final String ME_DECLARED_SKILLS = API_V1 + "/me/declared-skills";
     public static final String ADMIN_ACADEMIC_LEDGER_UPLOADS = API_V1 + "/admin/academic-ledger/uploads";
     public static final String ADMIN_ACADEMIC_RECORDS = API_V1 + "/admin/academic-records";
+    public static final String ME_PROJECTS = API_V1 + "/me/projects";
 
     private ApiPaths() {
     }
