@@ -25,7 +25,7 @@ public class ActivityEntity {
     @Column(name = "activity_name", nullable = false)
     private String activityName;
 
-    @Column(name = "role_title")
+    @Column(name = "role_title", nullable = false)
     private String roleTitle;
 
     @Column(name = "start_date")

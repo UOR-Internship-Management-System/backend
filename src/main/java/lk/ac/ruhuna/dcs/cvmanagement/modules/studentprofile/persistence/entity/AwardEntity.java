@@ -25,10 +25,10 @@ public class AwardEntity {
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "issuer")
+    @Column(name = "issuer", nullable = false)
     private String issuer;
 
-    @Column(name = "award_date")
+    @Column(name = "award_date", nullable = false)
     private LocalDate awardDate;
 
     @Column(name = "description")

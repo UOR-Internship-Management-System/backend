@@ -25,10 +25,10 @@ public class CertificateEntity {
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "issuer")
+    @Column(name = "issuer", nullable = false)
     private String issuer;
 
-    @Column(name = "issue_date")
+    @Column(name = "issue_date", nullable = false)
     private LocalDate issueDate;
 
     @Column(name = "credential_url")
