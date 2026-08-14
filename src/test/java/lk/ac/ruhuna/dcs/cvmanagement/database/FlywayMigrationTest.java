@@ -7,6 +7,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    private static final int LATEST_MIGRATION_COUNT = 28;
+    private static final int LATEST_MIGRATION_COUNT = 33;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -72,6 +73,33 @@ class FlywayMigrationTest {
                 .isEqualByComparingTo("3.70");
     }
 
+
+
+    @Test
+    void version55RejectsLegacyRowsThatViolateTheCanonicalSupportingDataContract() {
+        Flyway throughVersion54 = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .target("54")
+                .load();
+        assertThat(throughVersion54.migrate().success).isTrue();
+
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        UUID studentId = UUID.fromString("91000000-0000-4000-8000-000000000001");
+        jdbc.update("""
+                INSERT INTO public.eligible_students (
+                    id, index_number, university_email, full_name, academic_level, is_active
+                ) VALUES (?, 'SC/2026/00001', 'sc202600001@dcs.ruh.ac.lk', 'V055 Legacy Student', 3, TRUE)
+                """, studentId);
+        jdbc.update("""
+                INSERT INTO public.student_certificates (id, student_id, title, issuer, issue_date)
+                VALUES ('92000000-0000-4000-8000-000000000001', ?, 'Legacy Certificate', NULL, NULL)
+                """, studentId);
+
+        assertThatThrownBy(() -> flyway().migrate())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("V055 preflight failed");
+    }
 
     @Test
     void duplicateActiveFileHashIsRejectedButFailedUploadCanBeRetried() {

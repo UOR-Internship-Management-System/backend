@@ -25,10 +25,10 @@ public class WorkExperienceEntity {
     @Column(name = "organization", nullable = false)
     private String organization;
 
-    @Column(name = "position_title")
+    @Column(name = "position_title", nullable = false)
     private String positionTitle;
 
-    @Column(name = "start_date")
+    @Column(name = "start_date", nullable = false)
     private LocalDate startDate;
 
     @Column(name = "end_date")
