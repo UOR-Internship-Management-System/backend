@@ -159,7 +159,8 @@ class ModuleDependencyRulesTest {
 
         // Modules with approved HTTP endpoints in the current codebase.
         Set<String> activeModules = Set.of(
-                "health", "auth", "verification", "studentprofile", "admindashboard", "skills", "academics");
+                "health", "auth", "verification", "studentprofile", "admindashboard", "skills", "academics",
+                "adminstudents");
 
         for (String moduleName : MODULE_NAMES) {
             if (activeModules.contains(moduleName)) {
