@@ -15,6 +15,12 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projectio
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.AdminExperienceRow;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.AdminStudentProfileRow;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.RegisteredStudentRow;
+import java.util.Map;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.model.AdminCompetencyLevel;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.AdminAcademicRecordRow;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.AdminDeclaredSkillRow;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.AdminProjectRow;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.AdminProjectSkillRow;
 import org.junit.jupiter.api.Test;
 
 class AdminStudentMapperTest {
@@ -170,4 +176,62 @@ class AdminStudentMapperTest {
         assertThat(response.cvSupportingData().experiences()).isEmpty();
         assertThat(response.latestCv().availability().name()).isEqualTo("NOT_SAVED");
     }
+
+    @Test
+    void mapsDeclaredSkillsProjectsAndAcademicRecordsToFrontendContract() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-08-14T10:00:00Z");
+        UUID projectId = UUID.randomUUID();
+        UUID skillId = UUID.randomUUID();
+
+        var skill = mapper.toDeclaredSkill(new AdminDeclaredSkillRow(
+                UUID.randomUUID(),
+                skillId,
+                "Java",
+                AdminCompetencyLevel.ADVANCED,
+                2,
+                now.minusDays(1),
+                now));
+        assertThat(skill.skillName()).isEqualTo("Java");
+        assertThat(skill.competencyLevel()).isEqualTo(AdminCompetencyLevel.ADVANCED);
+
+        var project = mapper.toProject(
+                new AdminProjectRow(
+                        projectId,
+                        "CV Management System",
+                        "Portfolio project",
+                        "https://github.com/example/cv",
+                        null,
+                        LocalDate.parse("2026-01-01"),
+                        null,
+                        true,
+                        3,
+                        now.minusDays(2),
+                        now),
+                Map.of(projectId, List.of(new AdminProjectSkillRow(
+                        projectId,
+                        skillId,
+                        "Java",
+                        "Programming language"))));
+        assertThat(project.skills()).singleElement().satisfies(item -> {
+            assertThat(item.skillId()).isEqualTo(skillId);
+            assertThat(item.name()).isEqualTo("Java");
+        });
+
+        var academic = mapper.toAcademicRecord(new AdminAcademicRecordRow(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "CSC3112",
+                "Web Technologies",
+                new BigDecimal("4.0"),
+                "A-",
+                new BigDecimal("3.70"),
+                "Semester 1",
+                "2025/2026",
+                1,
+                "PASSED",
+                now));
+        assertThat(academic.courseCode()).isEqualTo("CSC3112");
+        assertThat(academic.gradePoint()).isEqualByComparingTo("3.70");
+    }
+
 }

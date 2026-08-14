@@ -10,6 +10,11 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.AdminStudentController;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.AdminAcademicRecordCriteria;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.AdminStudentCollectionCriteria;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminAcademicRecordResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminDeclaredSkillResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminProjectResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.AdminStudentSearchCriteria;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminLatestCvResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminStudentCvSupportingDataResponse;
@@ -86,4 +91,38 @@ class AdminStudentControllerTest {
         assertThat(controller.getStudentDetail(studentId)).isSameAs(expected);
         verify(inspectionService).getDetail(studentId);
     }
+
+    @Test
+    void delegatesChildCollectionQueryControlsWithoutMutationSemantics() {
+        RegisteredStudentQueryService rosterService = mock(RegisteredStudentQueryService.class);
+        AdminStudentInspectionService inspectionService = mock(AdminStudentInspectionService.class);
+        AdminStudentController controller = new AdminStudentController(rosterService, inspectionService);
+        UUID studentId = UUID.randomUUID();
+
+        PagedResponse<AdminDeclaredSkillResponse> skills =
+                new PagedResponse<>(List.of(), new PageMetadata(0, 20, 0, 0, "skillName,asc"));
+        PagedResponse<AdminProjectResponse> projects =
+                new PagedResponse<>(List.of(), new PageMetadata(1, 50, 0, 0, "updatedAt,desc"));
+        PagedResponse<AdminAcademicRecordResponse> academics =
+                new PagedResponse<>(List.of(), new PageMetadata(0, 5, 0, 0, "academicYear,desc"));
+
+        when(inspectionService.getDeclaredSkills(any(), any())).thenReturn(skills);
+        when(inspectionService.getProjects(any(), any())).thenReturn(projects);
+        when(inspectionService.getAcademicRecords(any(), any())).thenReturn(academics);
+
+        assertThat(controller.getDeclaredSkills(studentId, 0, 20, "java")).isSameAs(skills);
+        assertThat(controller.getProjects(studentId, 1, 50, "portal")).isSameAs(projects);
+        assertThat(controller.getAcademicRecords(
+                        studentId, 0, 5, "academicYear,desc", "web", "CSC3112"))
+                .isSameAs(academics);
+
+        verify(inspectionService).getDeclaredSkills(
+                studentId, new AdminStudentCollectionCriteria(0, 20, "java"));
+        verify(inspectionService).getProjects(
+                studentId, new AdminStudentCollectionCriteria(1, 50, "portal"));
+        verify(inspectionService).getAcademicRecords(
+                studentId,
+                new AdminAcademicRecordCriteria(0, 5, "academicYear,desc", "web", "CSC3112"));
+    }
+
 }

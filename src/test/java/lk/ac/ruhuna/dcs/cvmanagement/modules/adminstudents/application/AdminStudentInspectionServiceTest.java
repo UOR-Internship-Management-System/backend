@@ -20,16 +20,27 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.Reg
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.RoleName;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.AdminAcademicRecordCriteria;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.AdminStudentCollectionCriteria;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminAcademicRecordReadRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminDeclaredSkillReadRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminProjectReadRepository;
 import org.junit.jupiter.api.Test;
 
 class AdminStudentInspectionServiceTest {
 
     private final RegisteredStudentReadRepository registeredRepository = mock(RegisteredStudentReadRepository.class);
     private final AdminStudentDetailReadRepository detailRepository = mock(AdminStudentDetailReadRepository.class);
+    private final AdminDeclaredSkillReadRepository declaredSkillRepository = mock(AdminDeclaredSkillReadRepository.class);
+    private final AdminProjectReadRepository projectRepository = mock(AdminProjectReadRepository.class);
+    private final AdminAcademicRecordReadRepository academicRecordRepository = mock(AdminAcademicRecordReadRepository.class);
     private final CurrentActorProvider currentActorProvider = mock(CurrentActorProvider.class);
     private final AdminStudentInspectionService service = new AdminStudentInspectionService(
             registeredRepository,
             detailRepository,
+            declaredSkillRepository,
+            projectRepository,
+            academicRecordRepository,
             new AdminStudentMapper(),
             currentActorProvider);
 
@@ -86,6 +97,39 @@ class AdminStudentInspectionServiceTest {
 
         assertThatThrownBy(() -> service.getDetail(studentId))
                 .isInstanceOf(RegisteredStudentNotFoundException.class);
+    }
+
+
+    @Test
+    void childCollectionsRejectUnregisteredStudentsBeforeQueryingOwnedTables() {
+        UUID studentId = UUID.randomUUID();
+        when(currentActorProvider.currentActor()).thenReturn(Optional.of(adminActor()));
+        when(registeredRepository.existsRegisteredStudent(studentId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getDeclaredSkills(
+                        studentId,
+                        new AdminStudentCollectionCriteria(0, 20, "")))
+                .isInstanceOf(RegisteredStudentNotFoundException.class);
+    }
+
+    @Test
+    void childCollectionValidationRejectsUnsafePagingAndAcademicSorts() {
+        UUID studentId = UUID.randomUUID();
+        when(currentActorProvider.currentActor()).thenReturn(Optional.of(adminActor()));
+        when(registeredRepository.existsRegisteredStudent(studentId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.getProjects(
+                        studentId,
+                        new AdminStudentCollectionCriteria(-1, 20, null)))
+                .hasMessageContaining("page");
+        assertThatThrownBy(() -> service.getDeclaredSkills(
+                        studentId,
+                        new AdminStudentCollectionCriteria(0, 101, null)))
+                .hasMessageContaining("size");
+        assertThatThrownBy(() -> service.getAcademicRecords(
+                        studentId,
+                        new AdminAcademicRecordCriteria(0, 20, "DROP TABLE", null, null)))
+                .hasMessageContaining("sort");
     }
 
     private CurrentActor adminActor() {
