@@ -9,6 +9,24 @@ public final class AdminStudentErrors {
     private AdminStudentErrors() {
     }
 
+    public static AdminStudentApiException unauthorized() {
+        return new AdminStudentApiException(
+                HttpStatus.UNAUTHORIZED,
+                "UNAUTHORIZED",
+                "Authentication required",
+                "Authentication is required to access this resource.",
+                Map.of());
+    }
+
+    public static AdminStudentApiException forbidden() {
+        return new AdminStudentApiException(
+                HttpStatus.FORBIDDEN,
+                "FORBIDDEN",
+                "Access denied",
+                "The current account cannot access this resource.",
+                Map.of());
+    }
+
     public static AdminStudentApiException badRequest(String message) {
         return new AdminStudentApiException(
                 HttpStatus.BAD_REQUEST,
