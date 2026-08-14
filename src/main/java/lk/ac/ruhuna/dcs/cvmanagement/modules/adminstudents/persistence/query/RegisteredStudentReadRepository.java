@@ -51,6 +51,35 @@ public class RegisteredStudentReadRepository {
     }
 
 
+
+
+    /**
+     * Checks the registration/access predicate without joining optional profile or academic data.
+     *
+     * <p>Child inspection resources use this lightweight guard so skills/projects availability does
+     * not become coupled to the Academic Ledger schema being queryable.
+     */
+    public boolean existsRegisteredStudent(UUID studentId) {
+        MapSqlParameterSource parameters = new MapSqlParameterSource("studentId", studentId);
+        Boolean exists = jdbcTemplate.queryForObject(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM public.eligible_students es
+                    JOIN public.user_accounts ua ON ua.id = es.user_account_id
+                    JOIN public.user_roles ur ON ur.user_id = ua.id
+                    JOIN public.roles r ON r.id = ur.role_id
+                    WHERE es.id = :studentId
+                      AND es.is_active = TRUE
+                      AND ua.account_status = 'ACTIVE'
+                      AND r.name = 'ROLE_STUDENT'
+                )
+                """,
+                parameters,
+                Boolean.class);
+        return Boolean.TRUE.equals(exists);
+    }
+
     /** Returns one registered Student using the exact same predicate as the roster. */
     public Optional<RegisteredStudentRow> findById(UUID studentId) {
         MapSqlParameterSource parameters = new MapSqlParameterSource("studentId", studentId);
