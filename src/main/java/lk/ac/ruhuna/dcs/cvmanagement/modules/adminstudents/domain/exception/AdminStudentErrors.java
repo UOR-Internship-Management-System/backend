@@ -44,6 +44,10 @@ public final class AdminStudentErrors {
         return new AdminAcademicDataUnavailableException(cause);
     }
 
+    public static AdminStudentDataUnavailableException studentDataUnavailable(Throwable cause) {
+        return new AdminStudentDataUnavailableException(cause);
+    }
+
     public static CvNotSavedException cvNotSaved() {
         return new CvNotSavedException();
     }
