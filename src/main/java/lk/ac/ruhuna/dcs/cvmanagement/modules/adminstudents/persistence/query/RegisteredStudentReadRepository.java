@@ -4,6 +4,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.model.RegisteredStudentSort;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.RegisteredStudentRow;
 import org.springframework.data.domain.Page;
@@ -46,6 +48,25 @@ public class RegisteredStudentReadRepository {
 
     public RegisteredStudentReadRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+
+    /** Returns one registered Student using the exact same predicate as the roster. */
+    public Optional<RegisteredStudentRow> findById(UUID studentId) {
+        MapSqlParameterSource parameters = new MapSqlParameterSource("studentId", studentId);
+        String sql = """
+                SELECT es.id AS student_id,
+                       es.index_number,
+                       %s AS resolved_full_name,
+                       es.university_email,
+                       %s AS academic_batch,
+                       es.academic_level AS current_level,
+                       aas.computer_science_gpa AS official_gpa
+                """.formatted(RESOLVED_FULL_NAME, ACADEMIC_BATCH)
+                + FROM_AND_JOINS
+                + " WHERE es.id = :studentId AND " + REGISTERED_STUDENT_PREDICATE;
+
+        return jdbcTemplate.query(sql, parameters, this::mapRow).stream().findFirst();
     }
 
     public Page<RegisteredStudentRow> search(
