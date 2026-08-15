@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class AdminDashboardMetricsQuery {
 
+    private static final String INTERNSHIP_REQUESTS_SCHEMA = "public";
     private static final String INTERNSHIP_REQUESTS_TABLE = "internship_requests";
 
     private final JdbcTemplate jdbcTemplate;
@@ -37,10 +38,10 @@ public class AdminDashboardMetricsQuery {
     }
 
     public long countInternshipRequests() {
-        if (!tableExists(INTERNSHIP_REQUESTS_TABLE)) {
+        if (!tableExists(INTERNSHIP_REQUESTS_SCHEMA, INTERNSHIP_REQUESTS_TABLE)) {
             return 0L;
         }
-        return count("SELECT COUNT(*) FROM " + INTERNSHIP_REQUESTS_TABLE);
+        return count("SELECT COUNT(*) FROM public.internship_requests");
     }
 
     private long count(String sql) {
@@ -48,12 +49,15 @@ public class AdminDashboardMetricsQuery {
         return value == null ? 0L : value;
     }
 
-    private boolean tableExists(String expectedTableName) {
+    private boolean tableExists(String expectedSchemaName, String expectedTableName) {
         Boolean exists = jdbcTemplate.execute((ConnectionCallback<Boolean>) connection -> {
             DatabaseMetaData metadata = connection.getMetaData();
             try (ResultSet tables = metadata.getTables(connection.getCatalog(), null, null, new String[] {"TABLE"})) {
                 while (tables.next()) {
-                    if (expectedTableName.equalsIgnoreCase(tables.getString("TABLE_NAME"))) {
+                    String schemaName = tables.getString("TABLE_SCHEM");
+                    String tableName = tables.getString("TABLE_NAME");
+                    if (expectedSchemaName.equalsIgnoreCase(schemaName)
+                            && expectedTableName.equalsIgnoreCase(tableName)) {
                         return true;
                     }
                 }
