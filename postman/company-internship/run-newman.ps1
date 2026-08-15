@@ -25,7 +25,7 @@ $junitReport = Join-Path $ReportDirectory "company-internship-$timestamp.xml"
 Write-Host "Running Company/Internship acceptance against environment: $EnvironmentPath"
 & newman run $CollectionPath `
     --environment $EnvironmentPath `
-    --reporters cli,json,junit `
+    --reporters "cli,json,junit" `
     --reporter-json-export $jsonReport `
     --reporter-junit-export $junitReport `
     --timeout-request 15000 `

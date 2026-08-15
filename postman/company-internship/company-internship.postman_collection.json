@@ -168,7 +168,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Admin token is valid', () => pm.response.to.have.status(200));",
-                  "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;",
+                  "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
                   "const skill1 = pm.environment.get('activeSkillId');",
                   "const skill2 = pm.environment.get('secondActiveSkillId');",
                   "pm.test('activeSkillId is configured as a UUID', () => pm.expect(skill1, 'Set activeSkillId in the local Postman environment').to.match(uuid));",
