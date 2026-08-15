@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -62,9 +63,9 @@ public class AuditEventPublisher {
                 """
                 INSERT INTO audit_events (
                     actor_user_id, actor_role, event_type, event_category,
-                    resource_type, resource_id, metadata
+                    resource_type, resource_id, metadata, correlation_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?::jsonb)
+                VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?)
                 """,
                 actorUserId,
                 actorRole,
@@ -72,7 +73,8 @@ public class AuditEventPublisher {
                 category.name(),
                 resourceType,
                 resourceId,
-                serialize(metadata));
+                serialize(metadata),
+                CorrelationIdContext.current().orElse(null));
     }
 
     private void recordBestEffort(

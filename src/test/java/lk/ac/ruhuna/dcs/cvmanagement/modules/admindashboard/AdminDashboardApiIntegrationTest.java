@@ -86,11 +86,25 @@ class AdminDashboardApiIntegrationTest {
 
     @Test
     @WithMockAdmin
-    void dashboardReturnsZeroInternshipRequestsBeforeInternshipPersistenceIsIntroduced() throws Exception {
+    void dashboardReturnsZeroInternshipRequestsWhenPublicTableIsAbsent() throws Exception {
         mockMvc.perform(get("/api/v1/admin/dashboard/metrics"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalStudents").value(1))
                 .andExpect(jsonPath("$.registeredStudents").value(0))
+                .andExpect(jsonPath("$.internshipRequestsCreated").value(0));
+    }
+
+    @Test
+    @WithMockAdmin
+    void dashboardIgnoresSameNamedInternshipTableOutsidePublicSchema() throws Exception {
+        jdbcTemplate.execute("CREATE SCHEMA shadow");
+        jdbcTemplate.execute("CREATE TABLE shadow.internship_requests (id UUID PRIMARY KEY)");
+        jdbcTemplate.update(
+                "INSERT INTO shadow.internship_requests (id) VALUES (?)",
+                UUID.fromString("40000000-0000-0000-0000-000000000099"));
+
+        mockMvc.perform(get("/api/v1/admin/dashboard/metrics"))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.internshipRequestsCreated").value(0));
     }
 

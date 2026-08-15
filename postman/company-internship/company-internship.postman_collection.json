@@ -1,0 +1,2327 @@
+{
+  "info": {
+    "_postman_id": "ba618a2e-0299-4e60-9aec-d2a7d022327c",
+    "name": "CV Management - Company & Internship Acceptance",
+    "description": "Patch 9 release acceptance collection. Runs against a real backend and real PostgreSQL data. Requires local ADMIN/STUDENT credentials and two ACTIVE taxonomy Skill UUIDs. It creates uniquely named data and cleans it up at the end.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 - Authentication",
+      "item": [
+        {
+          "name": "01 Admin login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/admin/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "admin",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{adminEmail}}\",\"password\":\"{{adminPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('runId', `${Date.now()}-${Math.floor(Math.random()*100000)}`);",
+                  "['adminToken','studentToken','companyId','companyEtag','companyStaleEtag','requestId','requestEtag','requestStaleEtag','requiredSkillId2','cleanupCompanyId','cleanupCompanyEtag','cleanupRequestId','cleanupRequestEtag'].forEach(k => pm.collectionVariables.unset(k));",
+                  "pm.collectionVariables.set('zeroUuid', '00000000-0000-0000-0000-000000000000');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin login returns 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Admin access token is present', () => pm.expect(body.accessToken).to.be.a('string').and.not.empty);",
+                  "pm.test('Authenticated principal is ADMIN', () => {",
+                  "  pm.expect(body.user).to.be.an('object');",
+                  "  pm.expect(body.user.roles).to.include('ADMIN');",
+                  "});",
+                  "pm.collectionVariables.set('adminToken', body.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Student login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/student/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "student",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{studentEmail}}\",\"password\":\"{{studentPassword}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student login returns 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Student access token is present', () => pm.expect(body.accessToken).to.be.a('string').and.not.empty);",
+                  "pm.test('Authenticated principal is STUDENT and not ADMIN', () => {",
+                  "  pm.expect(body.user.roles).to.include('STUDENT');",
+                  "  pm.expect(body.user.roles).to.not.include('ADMIN');",
+                  "});",
+                  "pm.collectionVariables.set('studentToken', body.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Acceptance input preflight",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin token is valid', () => pm.response.to.have.status(200));",
+                  "const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+                  "const skill1 = pm.environment.get('activeSkillId');",
+                  "const skill2 = pm.environment.get('secondActiveSkillId');",
+                  "pm.test('activeSkillId is configured as a UUID', () => pm.expect(skill1, 'Set activeSkillId in the local Postman environment').to.match(uuid));",
+                  "pm.test('secondActiveSkillId is configured as a UUID', () => pm.expect(skill2, 'Set secondActiveSkillId in the local Postman environment').to.match(uuid));",
+                  "pm.test('Two distinct active taxonomy skills are configured', () => pm.expect(skill2).to.not.eql(skill1));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 - Company CRUD",
+      "item": [
+        {
+          "name": "01 Create Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Patch 9 Company {{runId}}\",\"websiteUrl\":\"https://example.com\",\"contactPerson\":\"Initial Contact\",\"contactEmail\":\"acceptance@example.com\",\"contactPhone\":\"+94111222333\",\"notes\":\"Created by Patch 9 acceptance\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company create returns 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "const etag = pm.response.headers.get('ETag');",
+                  "pm.test('Location points to created Company', () => pm.expect(pm.response.headers.get('Location')).to.include(body.companyId));",
+                  "pm.test('Strong quoted ETag is returned', () => pm.expect(etag).to.match(/^\"\\d+\"$/));",
+                  "pm.test('Company response excludes lifecycle state', () => { pm.expect(body).to.not.have.property('active'); pm.expect(body).to.not.have.property('status'); });",
+                  "pm.collectionVariables.set('companyId', body.companyId);",
+                  "pm.collectionVariables.set('companyEtag', etag);",
+                  "pm.collectionVariables.set('companyName', body.name);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Search Companies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies?page=0&size=20&search={{companyName}}&sort=name,asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "search",
+                  "value": "{{companyName}}"
+                },
+                {
+                  "key": "sort",
+                  "value": "name,asc"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company list returns 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Search returns created Company', () => pm.expect(body.items.some(x => x.companyId === pm.collectionVariables.get('companyId'))).to.be.true);",
+                  "pm.test('Page is bounded', () => pm.expect(body.page.size).to.be.at.most(100));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Get Company",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies",
+                "{{companyId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company detail returns 200', () => pm.response.to.have.status(200));",
+                  "const body=pm.response.json();",
+                  "pm.test('Detail matches Company', () => pm.expect(body.companyId).to.eql(pm.collectionVariables.get('companyId')));",
+                  "pm.test('ETag matches response version', () => pm.expect(pm.response.headers.get('ETag')).to.eql(`\"${body.version}\"`));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Update Company",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{companyEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies",
+                "{{companyId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"contactPerson\":\"Acceptance Contact\",\"notes\":\"Patch 9 acceptance\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('companyStaleEtag', pm.collectionVariables.get('companyEtag'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company update returns 200', () => pm.response.to.have.status(200));",
+                  "const body=pm.response.json(); const etag=pm.response.headers.get('ETag');",
+                  "pm.test('Company update persisted fields', () => { pm.expect(body.contactPerson).to.eql('Acceptance Contact'); pm.expect(body.notes).to.eql('Patch 9 acceptance'); });",
+                  "pm.test('Company version advanced', () => pm.expect(etag).to.not.eql(pm.collectionVariables.get('companyStaleEtag')));",
+                  "pm.collectionVariables.set('companyEtag', etag);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Company Validation and Concurrency",
+      "item": [
+        {
+          "name": "01 Reject normalized duplicate Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"  patch   9   company   {{runId}}  \"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Normalized duplicate returns 409', () => pm.response.to.have.status(409));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  "",
+                  "pm.test('Error code is DUPLICATE_COMPANY', () => pm.expect(problem.code).to.eql('DUPLICATE_COMPANY'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Reject update without If-Match",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies",
+                "{{companyId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"notes\":\"must not apply\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing If-Match returns 428', () => pm.response.to.have.status(428));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  "",
+                  "pm.test('Error code is IF_MATCH_REQUIRED', () => pm.expect(problem.code).to.eql('IF_MATCH_REQUIRED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Reject stale Company update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{companyStaleEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies",
+                "{{companyId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"notes\":\"stale update must not apply\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Stale If-Match returns 412', () => pm.response.to.have.status(412));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  "",
+                  "pm.test('Error code is PRECONDITION_FAILED', () => pm.expect(problem.code).to.eql('PRECONDITION_FAILED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Reject removed Company active field",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Removed Scope {{runId}}\",\"active\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Removed Company active field is rejected', () => pm.response.to.have.status(400));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Internship Request CRUD",
+      "item": [
+        {
+          "name": "01 Create Internship Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"companyId\":\"{{companyId}}\",\"title\":\"Patch 9 Intern {{runId}}\",\"description\":\"Acceptance request\",\"shortlistGuidanceValue\":10,\"requiredSkills\":[{\"skillId\":\"{{activeSkillId}}\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Internship Request create returns 201', () => pm.response.to.have.status(201));",
+                  "const body=pm.response.json(); const etag=pm.response.headers.get('ETag');",
+                  "pm.test('Location points to created Request', () => pm.expect(pm.response.headers.get('Location')).to.include(body.requestId));",
+                  "pm.test('Strong quoted ETag is returned', () => pm.expect(etag).to.match(/^\"\\d+\"$/));",
+                  "pm.test('Request uses selected Company', () => pm.expect(body.company.companyId).to.eql(pm.collectionVariables.get('companyId')));",
+                  "pm.test('Request excludes removed status and GPA criteria', () => { ['status','minimumGpa','maximumGpa','requiredGpa','gpaRange','gpaEligibility'].forEach(k => pm.expect(body).to.not.have.property(k)); });",
+                  "pm.test('Initial required Skill is present', () => pm.expect(body.requiredSkills.map(x=>x.skillId)).to.include(pm.environment.get('activeSkillId')));",
+                  "pm.collectionVariables.set('requestId', body.requestId); pm.collectionVariables.set('requestEtag', etag); pm.collectionVariables.set('requestTitle', body.title);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 List Requests by Company",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests?page=0&size=20&companyId={{companyId}}&sort=createdAt,desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "companyId",
+                  "value": "{{companyId}}"
+                },
+                {
+                  "key": "sort",
+                  "value": "createdAt,desc"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request list returns 200', () => pm.response.to.have.status(200));",
+                  "const body=pm.response.json();",
+                  "pm.test('Company filter returns created Request', () => pm.expect(body.items.some(x => x.requestId === pm.collectionVariables.get('requestId') && x.company.companyId === pm.collectionVariables.get('companyId'))).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Get Internship Request",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request detail returns 200',()=>pm.response.to.have.status(200)); const b=pm.response.json(); pm.test('Detail ID matches',()=>pm.expect(b.requestId).to.eql(pm.collectionVariables.get('requestId'))); pm.test('ETag matches version',()=>pm.expect(pm.response.headers.get('ETag')).to.eql(`\"${b.version}\"`));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Update Internship Request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{requestEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"Patch 9 Updated Intern {{runId}}\",\"description\":\"Updated acceptance request\",\"shortlistGuidanceValue\":25}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('requestStaleEtag', pm.collectionVariables.get('requestEtag'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request update returns 200', () => pm.response.to.have.status(200));",
+                  "const body=pm.response.json(); const etag=pm.response.headers.get('ETag');",
+                  "pm.test('Request fields updated', () => { pm.expect(body.title).to.eql(`Patch 9 Updated Intern ${pm.collectionVariables.get('runId')}`); pm.expect(body.shortlistGuidanceValue).to.eql(25); });",
+                  "pm.test('Request ETag advanced', () => pm.expect(etag).to.not.eql(pm.collectionVariables.get('requestStaleEtag')));",
+                  "pm.collectionVariables.set('requestEtag', etag); pm.collectionVariables.set('requestTitle', body.title);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Required Skills",
+      "item": [
+        {
+          "name": "01 List Required Skills",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}/required-skills?page=0&size=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}",
+                "required-skills"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "100"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Required Skill list returns 200',()=>pm.response.to.have.status(200)); const b=pm.response.json(); pm.test('Initial Skill exists',()=>pm.expect(b.items.map(x=>x.skillId)).to.include(pm.environment.get('activeSkillId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Reject Duplicate Required Skill",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{requestEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}/required-skills",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}",
+                "required-skills"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"skillId\":\"{{activeSkillId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Duplicate Skill returns 409',()=>pm.response.to.have.status(409)); ",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  " pm.test('Code is DUPLICATE_REQUIRED_SKILL',()=>pm.expect(problem.code).to.eql('DUPLICATE_REQUIRED_SKILL'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Add Second Required Skill",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{requestEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}/required-skills",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}",
+                "required-skills"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"skillId\":\"{{secondActiveSkillId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Add Skill returns 201',()=>pm.response.to.have.status(201)); const b=pm.response.json(); const e=pm.response.headers.get('ETag'); pm.test('Added Skill matches',()=>pm.expect(b.skillId).to.eql(pm.environment.get('secondActiveSkillId'))); pm.test('Parent ETag advanced',()=>pm.expect(e).to.match(/^\"\\d+\"$/)); pm.collectionVariables.set('requiredSkillId2',b.requiredSkillId); pm.collectionVariables.set('requestEtag',e);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Remove Second Required Skill",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{requestEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}/required-skills/{{requiredSkillId2}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}",
+                "required-skills",
+                "{{requiredSkillId2}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Remove Skill returns 204',()=>pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Refresh Request ETag",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request refresh returns 200',()=>pm.response.to.have.status(200)); const b=pm.response.json(); pm.collectionVariables.set('requestEtag',pm.response.headers.get('ETag')); pm.test('Second Skill removed',()=>pm.expect(b.requiredSkills.map(x=>x.skillId)).to.not.include(pm.environment.get('secondActiveSkillId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Atomic Skill Replacement",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{requestEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"requiredSkills\":[{\"skillId\":\"{{activeSkillId}}\"},{\"skillId\":\"{{secondActiveSkillId}}\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Atomic replacement returns 200',()=>pm.response.to.have.status(200)); const b=pm.response.json(); const ids=b.requiredSkills.map(x=>x.skillId); pm.test('Replacement is exact',()=>{pm.expect(ids).to.have.members([pm.environment.get('activeSkillId'),pm.environment.get('secondActiveSkillId')]); pm.expect(ids).to.have.length(2);}); pm.collectionVariables.set('requestEtag',pm.response.headers.get('ETag'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Internship Validation and Concurrency",
+      "item": [
+        {
+          "name": "01 Reject Missing Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"companyId\":\"{{missingCompanyId}}\",\"title\":\"Missing Company {{runId}}\",\"requiredSkills\":[]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing Company returns 404',()=>pm.response.to.have.status(404));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  "",
+                  "pm.test('Code is COMPANY_NOT_FOUND',()=>pm.expect(problem.code).to.eql('COMPANY_NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Reject Invalid Skill and Roll Back Patch",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{requestEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\":\"MUST ROLL BACK\",\"requiredSkills\":[{\"skillId\":\"{{invalidSkillId}}\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid taxonomy Skill returns 422',()=>pm.response.to.have.status(422));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  "",
+                  "pm.test('Code is INVALID_TAXONOMY_SKILL',()=>pm.expect(problem.code).to.eql('INVALID_TAXONOMY_SKILL'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Verify Invalid Patch Rolled Back",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Request remains unchanged after invalid atomic patch',()=>pm.response.to.have.status(200));",
+                  "const b=pm.response.json();",
+                  "pm.test('Title was rolled back',()=>pm.expect(b.title).to.eql(pm.collectionVariables.get('requestTitle')));",
+                  "pm.test('Required Skills were rolled back',()=>pm.expect(b.requiredSkills.map(x=>x.skillId)).to.have.members([pm.environment.get('activeSkillId'),pm.environment.get('secondActiveSkillId')]));",
+                  "pm.collectionVariables.set('requestEtag',pm.response.headers.get('ETag'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Reject Update without If-Match",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"description\":\"must not apply\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Missing If-Match returns 428', () => pm.response.to.have.status(428));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  "",
+                  "pm.test('Error code is IF_MATCH_REQUIRED', () => pm.expect(problem.code).to.eql('IF_MATCH_REQUIRED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Reject Stale Request Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "If-Match",
+                "value": "{{requestStaleEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"description\":\"stale must not apply\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Stale If-Match returns 412', () => pm.response.to.have.status(412));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  "",
+                  "pm.test('Error code is PRECONDITION_FAILED', () => pm.expect(problem.code).to.eql('PRECONDITION_FAILED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Reject Removed Status and GPA Fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"companyId\":\"{{companyId}}\",\"title\":\"Removed Scope Request {{runId}}\",\"status\":\"DRAFT\",\"minimumGpa\":3.0,\"requiredSkills\":[]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Removed request fields are rejected',()=>pm.response.to.have.status(400));",
+                  "",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 - Cascade Delete",
+      "item": [
+        {
+          "name": "01 Delete Company with Linked Request",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{companyEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies",
+                "{{companyId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company hard delete returns 204',()=>pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Verify Cascaded Request Is Gone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cascaded Request is gone',()=>pm.response.to.have.status(404)); ",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  " pm.test('Code is INTERNSHIP_REQUEST_NOT_FOUND',()=>pm.expect(problem.code).to.eql('INTERNSHIP_REQUEST_NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Verify Company Is Gone",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies",
+                "{{companyId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company is gone',()=>pm.response.to.have.status(404)); ",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  " pm.test('Code is COMPANY_NOT_FOUND',()=>pm.expect(problem.code).to.eql('COMPANY_NOT_FOUND'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Create Post-Cascade Company",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Patch 9 Cleanup Company {{runId}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Post-cascade Company create returns 201',()=>pm.response.to.have.status(201)); const b=pm.response.json(); pm.collectionVariables.set('cleanupCompanyId',b.companyId); pm.collectionVariables.set('cleanupCompanyEtag',pm.response.headers.get('ETag'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Reuse Canonical Skill After Cascade",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"companyId\":\"{{cleanupCompanyId}}\",\"title\":\"Post Cascade Skill Proof {{runId}}\",\"requiredSkills\":[{\"skillId\":\"{{activeSkillId}}\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Canonical Skill remains usable after cascade',()=>pm.response.to.have.status(201)); const b=pm.response.json(); pm.test('Reused canonical Skill is present',()=>pm.expect(b.requiredSkills.map(x=>x.skillId)).to.include(pm.environment.get('activeSkillId'))); pm.collectionVariables.set('cleanupRequestId',b.requestId); pm.collectionVariables.set('cleanupRequestEtag',pm.response.headers.get('ETag'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 - Security",
+      "item": [
+        {
+          "name": "01 Reject No Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Unauthenticated Admin endpoint returns 401',()=>pm.response.to.have.status(401)); ",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  " pm.test('Code is UNAUTHORIZED',()=>pm.expect(problem.code).to.eql('UNAUTHORIZED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Reject Student Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{studentToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Student token cannot access Admin endpoint',()=>pm.response.to.have.status(403)); ",
+                  "const problem = pm.response.json();",
+                  "pm.expect(problem).to.have.property('status', pm.response.code);",
+                  "pm.expect(problem).to.have.property('code');",
+                  "pm.expect(problem).to.have.property('correlationId');",
+                  "pm.expect(problem.correlationId).to.be.a('string').and.not.empty;",
+                  "pm.expect(problem).to.not.have.property('stackTrace');",
+                  "pm.expect(problem).to.not.have.property('exception');",
+                  " pm.test('Code is FORBIDDEN',()=>pm.expect(problem.code).to.eql('FORBIDDEN'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 - Cleanup",
+      "item": [
+        {
+          "name": "00 Cleanup Primary Request If Needed",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{requestEtag}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{requestId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Primary Request cleanup is safe',()=>pm.expect([204,404]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "00b Cleanup Primary Company If Needed",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{companyEtag}}"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies/{{companyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies",
+                "{{companyId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Primary Company cleanup is safe',()=>pm.expect([204,404]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "01 Delete Post-Cascade Request",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{cleanupRequestEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/internship-requests/{{cleanupRequestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "internship-requests",
+                "{{cleanupRequestId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cleanup Request delete is safe',()=>pm.expect([204,404]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Delete Post-Cascade Company",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "If-Match",
+                "value": "{{cleanupCompanyEtag}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/companies/{{cleanupCompanyId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "companies",
+                "{{cleanupCompanyId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cleanup Company delete is safe',()=>pm.expect([204,404]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Admin logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin logout returns 204',()=>pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "studentToken",
+      "value": ""
+    },
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "zeroUuid",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "companyId",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "companyEtag",
+      "value": "\"0\""
+    },
+    {
+      "key": "companyStaleEtag",
+      "value": "\"0\""
+    },
+    {
+      "key": "requestId",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "requestEtag",
+      "value": "\"0\""
+    },
+    {
+      "key": "requestStaleEtag",
+      "value": "\"0\""
+    },
+    {
+      "key": "requestTitle",
+      "value": ""
+    },
+    {
+      "key": "requiredSkillId2",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "cleanupCompanyId",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "cleanupCompanyEtag",
+      "value": "\"0\""
+    },
+    {
+      "key": "cleanupRequestId",
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "key": "cleanupRequestEtag",
+      "value": "\"0\""
+    }
+  ]
+}

@@ -6,16 +6,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
 /** Writes OpenAPI-compatible problem details for authentication and authorization failures. */
 @Component
 public class SecurityProblemResponseWriter {
-
-    private static final String CORRELATION_HEADER = "X-Correlation-Id";
-    private static final String REQUEST_ID_HEADER = "X-Request-Id";
 
     private final ObjectMapper objectMapper;
 
@@ -50,7 +47,7 @@ public class SecurityProblemResponseWriter {
             String code,
             String title,
             String message) throws IOException {
-        String correlationId = correlationId(request);
+        String correlationId = CorrelationIdContext.ensure(request);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("type", "https://uor-cv-system/errors/" + code.toLowerCase().replace('_', '-'));
         body.put("title", title);
@@ -62,15 +59,7 @@ public class SecurityProblemResponseWriter {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        response.setHeader(CORRELATION_HEADER, correlationId);
+        response.setHeader(CorrelationIdContext.CORRELATION_ID_HEADER, correlationId);
         objectMapper.writeValue(response.getOutputStream(), body);
-    }
-
-    private String correlationId(HttpServletRequest request) {
-        String value = request.getHeader(CORRELATION_HEADER);
-        if (value == null || value.isBlank()) {
-            value = request.getHeader(REQUEST_ID_HEADER);
-        }
-        return value == null || value.isBlank() ? UUID.randomUUID().toString() : value.trim();
     }
 }

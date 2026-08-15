@@ -2,19 +2,28 @@ package lk.ac.ruhuna.dcs.cvmanagement.shared.error;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
-import lk.ac.ruhuna.dcs.cvmanagement.shared.error.PreconditionFailedException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+/** Shared exception translation for endpoints that use the common application error hierarchy. */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final String INVALID_VALUE = "INVALID_VALUE";
 
     private final ProblemDetailsFactory problemDetailsFactory;
 
@@ -33,14 +42,17 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiErrorResponse> handleMethodArgumentNotValid(
             MethodArgumentNotValidException exception,
             HttpServletRequest request) {
-        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        List<ApiFieldError> fieldErrors = new ArrayList<>();
         for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
-            fieldErrors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
+            fieldErrors.add(new ApiFieldError(
+                    fieldError.getField(),
+                    INVALID_VALUE,
+                    fieldError.getDefaultMessage() == null ? "Invalid value." : fieldError.getDefaultMessage()));
         }
         return build(
                 HttpStatus.BAD_REQUEST,
                 ApiErrorCode.VALIDATION_FAILED,
-                "Request validation failed.",
+                "One or more request values are invalid.",
                 request,
                 fieldErrors);
     }
@@ -49,13 +61,16 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiErrorResponse> handleConstraintViolation(
             ConstraintViolationException exception,
             HttpServletRequest request) {
-        Map<String, String> fieldErrors = new LinkedHashMap<>();
-        exception.getConstraintViolations().forEach(violation ->
-                fieldErrors.putIfAbsent(violation.getPropertyPath().toString(), violation.getMessage()));
+        List<ApiFieldError> fieldErrors = exception.getConstraintViolations().stream()
+                .map(violation -> new ApiFieldError(
+                        violation.getPropertyPath().toString(),
+                        INVALID_VALUE,
+                        violation.getMessage()))
+                .toList();
         return build(
                 HttpStatus.BAD_REQUEST,
                 ApiErrorCode.VALIDATION_FAILED,
-                "Request validation failed.",
+                "One or more request values are invalid.",
                 request,
                 fieldErrors);
     }
@@ -67,7 +82,55 @@ public class GlobalExceptionHandler {
         return build(
                 HttpStatus.BAD_REQUEST,
                 ApiErrorCode.VALIDATION_FAILED,
-                "Request validation failed.",
+                "One or more request values are invalid.",
+                request,
+                null);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception,
+            HttpServletRequest request) {
+        return build(
+                HttpStatus.BAD_REQUEST,
+                ApiErrorCode.VALIDATION_FAILED,
+                "One or more request values are invalid.",
+                request,
+                List.of(new ApiFieldError(exception.getName(), INVALID_VALUE, "Invalid value.")));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ResponseEntity<ApiErrorResponse> handleUnreadableBody(
+            HttpMessageNotReadableException exception,
+            HttpServletRequest request) {
+        return build(
+                HttpStatus.BAD_REQUEST,
+                ApiErrorCode.BAD_REQUEST,
+                "The request body is malformed or cannot be read.",
+                request,
+                null);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    ResponseEntity<ApiErrorResponse> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException exception,
+            HttpServletRequest request) {
+        return build(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                ApiErrorCode.UNSUPPORTED_MEDIA_TYPE,
+                "The submitted content type is not supported for this operation.",
+                request,
+                null);
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ResponseEntity<ApiErrorResponse> handleOptimisticLockingFailure(
+            ObjectOptimisticLockingFailureException exception,
+            HttpServletRequest request) {
+        return build(
+                HttpStatus.PRECONDITION_FAILED,
+                ApiErrorCode.PRECONDITION_FAILED,
+                "This resource changed since it was loaded. Reload the latest version and try again.",
                 request,
                 null);
     }
@@ -82,26 +145,17 @@ public class GlobalExceptionHandler {
                 null);
     }
 
-    @ExceptionHandler(PreconditionFailedException.class)
-    ResponseEntity<ApiErrorResponse> handlePreconditionFailed(
-        PreconditionFailedException exception,
-        HttpServletRequest request) {
-        return build(
-            HttpStatus.PRECONDITION_FAILED,
-            ApiErrorCode.CONFLICT,
-            exception.getMessage(),
-            request,
-            null);
-    }
-
     private ResponseEntity<ApiErrorResponse> build(
             HttpStatus status,
             ApiErrorCode code,
             String message,
             HttpServletRequest request,
-            Map<String, String> fieldErrors) {
+            List<ApiFieldError> fieldErrors) {
+        ApiErrorResponse body = problemDetailsFactory.create(status, code, message, request, fieldErrors, Map.of());
         return ResponseEntity
                 .status(status)
-                .body(problemDetailsFactory.create(status, code, message, request, fieldErrors));
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .header(CorrelationIdContext.CORRELATION_ID_HEADER, body.correlationId())
+                .body(body);
     }
 }

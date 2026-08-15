@@ -9,7 +9,7 @@ info:
   x-revision-summary:
     - Preserved every valid Sprint 1-6 path and operationId from OpenAPI v1.5.0.
     - Finalized read-only Admin Student deep-dive and latest-saved CV availability/download semantics.
-    - Finalized company metadata with Admin-only lifecycle management and soft deactivation.
+    - Finalized company metadata with Admin-managed CRUD and destructive deletion; no active/inactive lifecycle.
     - Finalized internship requests with taxonomy-backed required skills and no persisted GPA criteria.
     - Finalized persisted deterministic filtering runs using runtime official GPA and declared skills only.
     - Finalized manual draft shortlists, non-blocking guidance acknowledgement, and atomic conflict-aware finalization.
@@ -63,8 +63,8 @@ info:
       upload is rejected with 409. A prior PROCESSING_FAILED or VALIDATION_FAILED batch does not prevent a corrected file
       upload.
   x-sprint-7-8-contract-decisions:
-    companyDeletion: DELETE performs idempotent soft deactivation and retains referenced requests.
-    requestDeletion: DELETE performs idempotent transition to CANCELLED, subject to finalized-shortlist conflicts.
+    companyDeletion: DELETE permanently removes the company and cascades to its linked internship requests.
+    requestDeletion: DELETE permanently removes the internship request and its required-skill associations.
     requestSkillMutation: Create/update may atomically replace the full skill set; nested endpoints support incremental edits.
     filterRuns: Persisted sanitized runtime metadata; candidate results are recomputed from latest committed data.
     shortlistCardinality: One shortlist resource per internship request in Version 1.
@@ -3661,7 +3661,6 @@ paths:
         - $ref: '#/components/parameters/Size'
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/CompanySort'
-        - $ref: '#/components/parameters/CompanyActiveFilter'
       responses:
         '200':
           description: Successful response.
@@ -3887,7 +3886,6 @@ paths:
         - $ref: '#/components/parameters/Size'
         - $ref: '#/components/parameters/Search'
         - $ref: '#/components/parameters/InternshipRequestSort'
-        - $ref: '#/components/parameters/InternshipRequestStatusFilter'
         - $ref: '#/components/parameters/CompanyIdFilter'
       responses:
         '200':
@@ -3955,8 +3953,6 @@ paths:
           $ref: '#/components/responses/Error503'
         '404':
           $ref: '#/components/responses/CompanyNotFound404'
-        '409':
-          $ref: '#/components/responses/CompanyInactive409'
         '422':
           $ref: '#/components/responses/InvalidTaxonomySkill422'
   /admin/internship-requests/{requestId}:
@@ -4055,8 +4051,6 @@ paths:
           $ref: '#/components/responses/Error503'
         '404':
           $ref: '#/components/responses/InternshipRequestNotFound404'
-        '409':
-          $ref: '#/components/responses/InternshipRequestState409'
         '422':
           $ref: '#/components/responses/InvalidTaxonomySkill422'
         '428':
@@ -4098,8 +4092,6 @@ paths:
           $ref: '#/components/responses/Error503'
         '404':
           $ref: '#/components/responses/InternshipRequestNotFound404'
-        '409':
-          $ref: '#/components/responses/InternshipRequestState409'
         '428':
           $ref: '#/components/responses/MissingIfMatch428'
   /admin/internship-requests/{requestId}/required-skills:
@@ -4150,7 +4142,7 @@ paths:
         - Internship Requests
       summary: Add one required skill.
       operationId: postAdminInternshipRequestsByRequestIdRequiredSkills
-      description: Incremental audited skill mutation for draft/request editing. Taxonomy is read-only and developer-managed.
+      description: Incremental audited skill mutation for request editing. Taxonomy is read-only and developer-managed.
       security:
         - bearerAuth: []
       x-access-role: ADMIN
@@ -4250,8 +4242,6 @@ paths:
           $ref: '#/components/responses/Error503'
         '404':
           $ref: '#/components/responses/InternshipRequestNotFound404'
-        '409':
-          $ref: '#/components/responses/InternshipRequestState409'
         '428':
           $ref: '#/components/responses/MissingIfMatch428'
   /admin/candidate-filtering/runs:
@@ -4298,8 +4288,6 @@ paths:
           $ref: '#/components/responses/Error500'
         '404':
           $ref: '#/components/responses/InternshipRequestNotFound404'
-        '409':
-          $ref: '#/components/responses/InternshipRequestState409'
         '422':
           $ref: '#/components/responses/FilterCriteria422'
         '503':
@@ -5242,15 +5230,6 @@ components:
       schema:
         $ref: '#/components/schemas/CompanySort'
       description: Constrained company ordering with companyId ascending as a stable secondary order.
-    CompanyActiveFilter:
-      name: active
-      in: query
-      schema:
-        type:
-          - boolean
-          - 'null'
-        default: true
-      description: Defaults to active companies. Use null to include both active and inactive records.
     CompanyIdFilter:
       name: companyId
       in: query
@@ -5266,14 +5245,6 @@ components:
       schema:
         $ref: '#/components/schemas/InternshipRequestSort'
       description: Constrained request ordering with requestId ascending as a stable secondary order.
-    InternshipRequestStatusFilter:
-      name: status
-      in: query
-      schema:
-        oneOf:
-          - $ref: '#/components/schemas/InternshipRequestStatus'
-          - type: 'null'
-      description: Optional internship request lifecycle filter.
     CandidateSort:
       name: sort
       in: query
@@ -5857,38 +5828,6 @@ components:
                 code: DUPLICATE_COMPANY
                 message: A company with the same normalized name already exists.
                 correlationId: req-20260719-0001
-    CompanyLinked409:
-      description: Company lifecycle conflict.
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-          examples:
-            company_has_active_requests:
-              summary: Company cannot be deactivated
-              value:
-                type: https://uor-cv-system/errors/company-has-active-requests
-                title: Company cannot be deactivated
-                status: 409
-                code: COMPANY_HAS_ACTIVE_REQUESTS
-                message: Close or cancel active internship requests before deactivating the company.
-                correlationId: req-20260719-0001
-    CompanyInactive409:
-      description: Inactive company conflict.
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-          examples:
-            company_inactive:
-              summary: Company is inactive
-              value:
-                type: https://uor-cv-system/errors/company-inactive
-                title: Company is inactive
-                status: 409
-                code: COMPANY_INACTIVE
-                message: Inactive companies cannot be selected for new internship requests.
-                correlationId: req-20260719-0001
     InternshipRequestNotFound404:
       description: Internship request not found.
       content:
@@ -5904,22 +5843,6 @@ components:
                 status: 404
                 code: INTERNSHIP_REQUEST_NOT_FOUND
                 message: The requested internship request does not exist.
-                correlationId: req-20260719-0001
-    InternshipRequestState409:
-      description: Internship request state conflict.
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-          examples:
-            internship_request_state_conflict:
-              summary: Request state conflict
-              value:
-                type: https://uor-cv-system/errors/internship-request-state-conflict
-                title: Request state conflict
-                status: 409
-                code: INTERNSHIP_REQUEST_STATE_CONFLICT
-                message: The requested transition is not allowed from the current state.
                 correlationId: req-20260719-0001
     DuplicateRequiredSkill409:
       description: Duplicate required skill.
@@ -6573,7 +6496,6 @@ components:
         - contactEmail
         - contactPhone
         - notes
-        - active
         - version
         - createdAt
         - updatedAt
@@ -6613,8 +6535,6 @@ components:
             - string
             - 'null'
           maxLength: 4000
-        active:
-          type: boolean
         version:
           type: integer
           minimum: 0
@@ -7223,7 +7143,6 @@ components:
       required:
         - companyId
         - title
-        - status
         - requiredSkills
       properties:
         companyId:
@@ -7238,8 +7157,6 @@ components:
             - string
             - 'null'
           maxLength: 10000
-        status:
-          $ref: '#/components/schemas/InternshipRequestStatus'
         shortlistGuidanceValue:
           type:
             - integer
@@ -7262,7 +7179,6 @@ components:
         - company
         - title
         - description
-        - status
         - shortlistGuidanceValue
         - requiredSkills
         - version
@@ -7284,8 +7200,6 @@ components:
             - string
             - 'null'
           maxLength: 10000
-        status:
-          $ref: '#/components/schemas/InternshipRequestStatus'
         shortlistGuidanceValue:
           type:
             - integer
@@ -7307,7 +7221,7 @@ components:
           type: string
           format: date-time
           readOnly: true
-      description: Admin-managed request. GPA is never stored in this resource.
+      description: Admin-managed request. GPA is never stored in this resource; the request remains editable until deleted.
     InternshipRequestUpdateRequest:
       type: object
       additionalProperties: false
@@ -7321,8 +7235,6 @@ components:
             - string
             - 'null'
           maxLength: 10000
-        status:
-          $ref: '#/components/schemas/InternshipRequestStatus'
         shortlistGuidanceValue:
           type:
             - integer
@@ -9825,7 +9737,6 @@ components:
         - createdAt,desc
         - title,asc
         - companyName,asc
-        - status,asc
     CandidateSort:
       type: string
       enum:
@@ -9840,14 +9751,6 @@ components:
         - createdAt,desc
         - companyName,asc
         - roleTitle,asc
-    InternshipRequestStatus:
-      type: string
-      enum:
-        - DRAFT
-        - ACTIVE
-        - CLOSED
-        - CANCELLED
-      description: DRAFT may become ACTIVE; ACTIVE may become CLOSED; CLOSED and CANCELLED are terminal retained states. DELETE removes the request resource.
     FilterSkillMatchMode:
       type: string
       enum:
@@ -10019,9 +9922,6 @@ components:
             - string
             - 'null'
           maxLength: 4000
-        active:
-          type: boolean
-          description: Reactivation is explicit; inactive companies cannot be selected for new requests.
       minProperties: 1
     InternshipRequestSummaryResponse:
       type: object
@@ -10031,7 +9931,6 @@ components:
         - companyId
         - companyName
         - title
-        - status
         - shortlistGuidanceValue
       properties:
         requestId:
@@ -10046,8 +9945,6 @@ components:
         title:
           type: string
           minLength: 1
-        status:
-          $ref: '#/components/schemas/InternshipRequestStatus'
         shortlistGuidanceValue:
           type:
             - integer

@@ -6,9 +6,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.AdminStudentController;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.exception.AdminStudentApiException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
@@ -21,12 +22,9 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /** Centralized OpenAPI problem-details mapping for Admin Student Inspection endpoints. */
-@RestControllerAdvice
+@RestControllerAdvice(assignableTypes = AdminStudentController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AdminStudentExceptionHandler {
-
-    private static final String CORRELATION_HEADER = "X-Correlation-Id";
-    private static final String REQUEST_ID_HEADER = "X-Request-Id";
 
     @ExceptionHandler(AdminStudentApiException.class)
     ResponseEntity<AdminStudentProblemDetails> handle(
@@ -124,7 +122,7 @@ public class AdminStudentExceptionHandler {
             List<AdminStudentFieldError> fieldErrors,
             Map<String, Object> details,
             HttpServletRequest request) {
-        String correlationId = correlationId(request);
+        String correlationId = CorrelationIdContext.ensure(request);
         AdminStudentProblemDetails body = new AdminStudentProblemDetails(
                 "https://uor-cv-system/errors/" + errorSlug(code),
                 title,
@@ -136,16 +134,8 @@ public class AdminStudentExceptionHandler {
                 details == null || details.isEmpty() ? null : Map.copyOf(details));
         return ResponseEntity.status(status)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .header(CORRELATION_HEADER, correlationId)
+                .header(CorrelationIdContext.CORRELATION_ID_HEADER, correlationId)
                 .body(body);
-    }
-
-    private String correlationId(HttpServletRequest request) {
-        String existing = request.getHeader(CORRELATION_HEADER);
-        if (existing == null || existing.isBlank()) {
-            existing = request.getHeader(REQUEST_ID_HEADER);
-        }
-        return existing == null || existing.isBlank() ? UUID.randomUUID().toString() : existing.trim();
     }
 
     private String errorSlug(String code) {

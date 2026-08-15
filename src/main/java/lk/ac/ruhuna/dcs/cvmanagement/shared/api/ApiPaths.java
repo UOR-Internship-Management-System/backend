@@ -10,6 +10,8 @@ public final class ApiPaths {
     public static final String ADMIN_ACADEMIC_LEDGER_UPLOADS = API_V1 + "/admin/academic-ledger/uploads";
     public static final String ADMIN_ACADEMIC_RECORDS = API_V1 + "/admin/academic-records";
     public static final String ADMIN_STUDENTS = API_V1 + "/admin/students";
+    public static final String ADMIN_COMPANIES = API_V1 + "/admin/companies";
+    public static final String ADMIN_INTERNSHIP_REQUESTS = API_V1 + "/admin/internship-requests";
     public static final String ME_PROJECTS = API_V1 + "/me/projects";
 
     private ApiPaths() {
