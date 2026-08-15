@@ -91,7 +91,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(parseOrigins(allowedOrigins));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id", "X-Request-Id", "If-Match"));
-        configuration.setExposedHeaders(List.of("X-Correlation-Id", "Location", "Retry-After"));
+        configuration.setExposedHeaders(List.of("X-Correlation-Id", "Location", "ETag", "Retry-After"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

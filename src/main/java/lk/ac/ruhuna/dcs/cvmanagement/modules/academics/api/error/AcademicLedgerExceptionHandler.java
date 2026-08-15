@@ -2,8 +2,8 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.error;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
-import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProperties;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
@@ -20,8 +20,6 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 public class AcademicLedgerExceptionHandler {
 
     private static final String LEDGER_UPLOAD_PATH = "/api/v1/admin/academic-ledger/uploads";
-    private static final String CORRELATION_HEADER = "X-Correlation-Id";
-    private static final String REQUEST_ID_HEADER = "X-Request-Id";
 
     private final AcademicLedgerProperties properties;
 
@@ -97,7 +95,7 @@ public class AcademicLedgerExceptionHandler {
             String message,
             Map<String, Object> details,
             HttpServletRequest request) {
-        String correlationId = correlationId(request);
+        String correlationId = CorrelationIdContext.ensure(request);
         AcademicLedgerProblemDetails body = new AcademicLedgerProblemDetails(
                 "https://uor-cv-system/errors/" + errorSlug(code),
                 title,
@@ -108,16 +106,8 @@ public class AcademicLedgerExceptionHandler {
                 details == null || details.isEmpty() ? null : details);
         return ResponseEntity.status(status)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .header(CORRELATION_HEADER, correlationId)
+                .header(CorrelationIdContext.CORRELATION_ID_HEADER, correlationId)
                 .body(body);
-    }
-
-    private String correlationId(HttpServletRequest request) {
-        String existing = request.getHeader(CORRELATION_HEADER);
-        if (existing == null || existing.isBlank()) {
-            existing = request.getHeader(REQUEST_ID_HEADER);
-        }
-        return existing == null || existing.isBlank() ? UUID.randomUUID().toString() : existing.trim();
     }
 
     private String errorSlug(String code) {
