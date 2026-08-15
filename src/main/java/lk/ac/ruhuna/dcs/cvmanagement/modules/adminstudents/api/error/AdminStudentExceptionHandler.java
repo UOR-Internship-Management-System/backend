@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.AdminStudentController;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.exception.AdminStudentApiException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
@@ -21,7 +22,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /** Centralized OpenAPI problem-details mapping for Admin Student Inspection endpoints. */
-@RestControllerAdvice
+@RestControllerAdvice(assignableTypes = AdminStudentController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AdminStudentExceptionHandler {
 

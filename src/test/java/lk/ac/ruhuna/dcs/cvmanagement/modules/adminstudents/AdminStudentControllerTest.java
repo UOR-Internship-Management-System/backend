@@ -5,6 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -23,10 +27,16 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.Admi
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminStudentProfileResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.application.AdminStudentInspectionService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.application.RegisteredStudentQueryService;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.error.AdminStudentExceptionHandler;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.GlobalExceptionHandler;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ProblemDetailsFactory;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PageMetadata;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AdminStudentControllerTest {
 
@@ -123,6 +133,23 @@ class AdminStudentControllerTest {
         verify(inspectionService).getAcademicRecords(
                 studentId,
                 new AdminAcademicRecordCriteria(0, 5, "academicYear,desc", "web", "CSC3112"));
+    }
+
+    @Test
+    void malformedStudentIdentifierReturnsProblemDetails() throws Exception {
+        AdminStudentController controller = new AdminStudentController(
+                mock(RegisteredStudentQueryService.class),
+                mock(AdminStudentInspectionService.class));
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(
+                        new AdminStudentExceptionHandler(),
+                        new GlobalExceptionHandler(new ProblemDetailsFactory()))
+                .build();
+
+        mockMvc.perform(get("/api/v1/admin/students/not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
 }

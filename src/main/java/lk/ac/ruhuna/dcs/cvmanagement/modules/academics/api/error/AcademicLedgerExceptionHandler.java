@@ -2,6 +2,7 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.error;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.AcademicLedgerController;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProperties;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
 import org.springframework.core.Ordered;
@@ -15,7 +16,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /** Centralized Academic Ledger problem-details mapping. */
-@RestControllerAdvice
+@RestControllerAdvice(assignableTypes = AcademicLedgerController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AcademicLedgerExceptionHandler {
 

@@ -71,6 +71,6 @@ Notes:
 - Playwright used local Chrome and the configured real backend; mocks were disabled.
 - Patch 8 harness corrections made during acceptance: exact dialog-button matching, pathname-based response predicates, success-toast dismissal, Company-search isolation, and a 60-second live-test timeout.
 - Patch 9 corrections made during acceptance: quoted the PowerShell reporter list, accepted the project's fixed UUID seed syntax, and enabled strict unknown-property rejection in Spring MVC's Jackson 3 mapper.
-- Full backend regression result: `186` tests, `2` failures, `0` errors, `33` skipped. Both failures are pre-existing and unrelated to Company/Internship work:
+- Full backend regression result after CI regression corrections: `188` tests, `2` failures, `0` errors, `33` skipped. Both failures are pre-existing and unrelated to Company/Internship work:
   - `ModuleDependencyRulesTest.moduleCodeDoesNotImportFromOtherModules` — Projects imports Skills and Student Profile internals.
   - `ModuleDependencyRulesTest.futureModuleControllersDoNotExposeEndpoints` — Projects controller is active while still classified as a future module.

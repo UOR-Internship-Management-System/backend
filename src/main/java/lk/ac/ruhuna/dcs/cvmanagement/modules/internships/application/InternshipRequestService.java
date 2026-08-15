@@ -168,24 +168,37 @@ public class InternshipRequestService {
         InternshipRequestEntity entity = findRequest(requestId);
         assertVersion(entity, expectedVersion);
 
+        String normalizedTitle = request.hasTitle() ? normalizeTitle(request.title()) : null;
+        String normalizedDescription = request.hasDescription()
+                ? normalizeNullable(request.description(), 10000, "description")
+                : null;
+        Integer normalizedGuidance = request.hasShortlistGuidanceValue()
+                ? validateGuidance(request.shortlistGuidanceValue())
+                : null;
         ValidatedSkills replacement = request.hasRequiredSkills()
                 ? validateSkills(request.requiredSkills())
                 : null;
+
+        // Bulk skill deletion triggers an automatic persistence-context flush. Replace the
+        // associations before making the managed parent dirty so its @Version advances only once.
+        if (replacement != null) {
+            replaceSkills(entity.getId(), replacement.skillIds());
+        }
+
         Set<String> changedFields = new HashSet<>();
         if (request.hasTitle()) {
-            entity.setTitle(normalizeTitle(request.title()));
+            entity.setTitle(normalizedTitle);
             changedFields.add("title");
         }
         if (request.hasDescription()) {
-            entity.setDescription(normalizeNullable(request.description(), 10000, "description"));
+            entity.setDescription(normalizedDescription);
             changedFields.add("description");
         }
         if (request.hasShortlistGuidanceValue()) {
-            entity.setShortlistGuidanceValue(validateGuidance(request.shortlistGuidanceValue()));
+            entity.setShortlistGuidanceValue(normalizedGuidance);
             changedFields.add("shortlistGuidanceValue");
         }
         if (replacement != null) {
-            replaceSkills(entity.getId(), replacement.skillIds());
             changedFields.add("requiredSkills");
         }
 
