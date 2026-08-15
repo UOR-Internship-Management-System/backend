@@ -56,6 +56,19 @@ class SecuritySmokeTest {
     }
 
     @Test
+    void companyAdminRoutesRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/companies"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    void studentRoleCannotAccessCompanyAdminRoutes() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/companies"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void studentVerificationPathIsNotBlocked() throws Exception {
         // Controller does not exist yet, so 404 or 405 is acceptable.
         // 401 or 403 would indicate a security misconfiguration.
