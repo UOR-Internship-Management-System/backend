@@ -22,7 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    private static final int LATEST_MIGRATION_COUNT = 37;
+    private static final int LATEST_MIGRATION_COUNT = 38;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -98,10 +98,23 @@ class FlywayMigrationTest {
                                 + "AND indexname = 'idx_internship_request_skills_skill_id')",
                         Boolean.class))
                 .isTrue();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ref.grade_scale", Integer.class)).isEqualTo(12);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ref.grade_scale", Integer.class)).isEqualTo(13);
         assertThat(jdbc.queryForObject(
                         "SELECT grade_point FROM ref.grade_scale WHERE grade_code = 'A-'", java.math.BigDecimal.class))
                 .isEqualByComparingTo("3.70");
+        assertThat(jdbc.queryForObject(
+                        "SELECT grade_point FROM ref.grade_scale WHERE grade_code = 'E*'", java.math.BigDecimal.class))
+                .isEqualByComparingTo("0.00");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM academic.subject", Integer.class)).isEqualTo(44);
+        assertThat(jdbc.queryForObject(
+                        "SELECT credits FROM academic.subject WHERE course_code = 'CSC1213'",
+                        java.math.BigDecimal.class))
+                .isEqualByComparingTo("3.0");
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM academic.subject "
+                                + "WHERE course_code IN ('CSC3133', 'CSC3152', 'CSC3162', 'CSC4282')",
+                        Integer.class))
+                .isEqualTo(4);
     }
 
 

@@ -45,12 +45,21 @@ class AcademicPersistenceIntegrationTest {
 
     @Test
     void academicMappingsValidateAndAuthoritativeGradeScaleIsAvailable() {
-        assertThat(gradeScaleRepository.count()).isEqualTo(12);
+        assertThat(gradeScaleRepository.count()).isEqualTo(13);
         var grade = gradeScaleRepository.findByGradeCodeIgnoreCaseAndActiveTrue("a-").orElseThrow();
         assertThat(grade.getGradePoint()).isEqualByComparingTo("3.70");
         assertThat(grade.isPassing()).isTrue();
 
-        // Subject seed data is intentionally withheld until the cohort-specific catalogue is authoritative.
-        assertThat(subjectRepository.count()).isZero();
+        var absent = gradeScaleRepository.findByGradeCodeIgnoreCaseAndActiveTrue("e*").orElseThrow();
+        assertThat(absent.getGradePoint()).isEqualByComparingTo("0.00");
+        assertThat(absent.isPassing()).isFalse();
+
+        assertThat(subjectRepository.count()).isEqualTo(44);
+        var databaseManagement = subjectRepository.findByCourseCodeInAndActiveTrue(java.util.Set.of("CSC1213"))
+                .getFirst();
+        assertThat(databaseManagement.getCredits()).isEqualByComparingTo("3.0");
+        assertThat(databaseManagement.getCatalogVersion()).isEqualTo("CSC-UNIFIED-V1");
+        assertThat(databaseManagement.getCohortStartYear()).isEqualTo((short) 2019);
+        assertThat(databaseManagement.getCohortEndYear()).isNull();
     }
 }
