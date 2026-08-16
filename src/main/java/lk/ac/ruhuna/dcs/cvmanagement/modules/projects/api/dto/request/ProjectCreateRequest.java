@@ -1,6 +1,8 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.projects.api.dto.request;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
@@ -13,6 +15,11 @@ public record ProjectCreateRequest(
     String demoUrl,
     LocalDate startDate,
     LocalDate endDate,
-    List<UUID> skillIds,
+    List<@NotNull UUID> skillIds,
     boolean includeInCv) {
+
+    @AssertTrue(message = "End date cannot be before start date.")
+    public boolean isDateRangeValid() {
+        return startDate == null || endDate == null || !endDate.isBefore(startDate);
+    }
 }
