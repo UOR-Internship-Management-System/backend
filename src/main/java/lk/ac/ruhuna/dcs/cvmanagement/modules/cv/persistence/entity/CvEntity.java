@@ -31,4 +31,25 @@ public class CvEntity {
 
     @Column(name = "saved_at")
     private OffsetDateTime savedAt;
+
+    @Column(name = "included_experience_ids")
+    private String includedExperienceIds;
+
+    @Column(name = "included_project_ids")
+    private String includedProjectIds;
+
+    @Column(name = "included_certificate_ids")
+    private String includedCertificateIds;
+
+    @Column(name = "included_award_ids")
+    private String includedAwardIds;
+
+    @Column(name = "included_activity_ids")
+    private String includedActivityIds;
+
+    @Column(name = "pdf_file_name")
+    private String pdfFileName;
+
+    @Column(name = "pdf_file_size_bytes")
+    private long pdfFileSizeBytes;
 }
