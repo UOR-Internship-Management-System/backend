@@ -53,7 +53,9 @@ info:
         description: Positive attempt number.
       - name: result_status
         required: true
-        description: Official result status such as PASSED or FAILED.
+        description:
+          Closed official result status. Use PASSED for A+ through C, FAILED for C- through E,
+          and ABSENT only for E*.
     derivedFields:
       - studentId
       - courseTitle
