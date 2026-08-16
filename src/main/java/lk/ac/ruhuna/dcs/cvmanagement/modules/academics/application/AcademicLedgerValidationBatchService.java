@@ -11,6 +11,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.domain.AcademicLedgerRowValidationStatus;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.domain.AcademicLedgerValidationSeverity;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.domain.AcademicResultStatus;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.AcademicStudentReferenceQuery;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.AcademicStudentReferenceQuery.StudentReference;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.entity.AcademicLedgerStagingRowEntity;
@@ -225,15 +226,19 @@ class AcademicLedgerValidationBatchService {
             AcademicLedgerStagingRowEntity row,
             GradeScaleEntity grade,
             List<AcademicLedgerValidationErrorEntity> errors) {
-        // OpenAPI v1.6 does not freeze a closed result-status enum. Only PASSED/FAILED semantics
-        // are source-supported, so other non-blank official statuses are preserved without invention.
-        if ("PASSED".equals(row.getResultStatus()) && !grade.isPassing()) {
-            errors.add(error(row, "result_status", "RESULT_STATUS_GRADE_MISMATCH",
-                    "The supplied result status conflicts with the authoritative passing grade rule.",
+        var suppliedStatus = AcademicResultStatus.fromExternalValue(row.getResultStatus());
+        if (suppliedStatus.isEmpty()) {
+            errors.add(error(row, "result_status", "RESULT_STATUS_INVALID",
+                    "result_status must be PASSED, FAILED, or ABSENT.",
                     row.getResultStatus(), null));
-        } else if ("FAILED".equals(row.getResultStatus()) && grade.isPassing()) {
+            return;
+        }
+
+        AcademicResultStatus expectedStatus = AcademicResultStatus.expectedFor(
+                grade.getGradeCode(), grade.isPassing());
+        if (suppliedStatus.get() != expectedStatus) {
             errors.add(error(row, "result_status", "RESULT_STATUS_GRADE_MISMATCH",
-                    "The supplied result status conflicts with the authoritative passing grade rule.",
+                    "The supplied result status conflicts with the authoritative letter-grade rule.",
                     row.getResultStatus(), null));
         }
     }

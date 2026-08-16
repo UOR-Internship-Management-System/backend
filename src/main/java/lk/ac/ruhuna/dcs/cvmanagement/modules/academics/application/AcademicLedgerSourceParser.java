@@ -86,7 +86,7 @@ class AcademicLedgerSourceParser {
             throw new AcademicLedgerProcessingException("Persisted CSV row has an invalid column count.");
         }
         String studentIndex = required(record.get(0), 40).toUpperCase(Locale.ROOT);
-        String courseCode = required(record.get(1), 30).toUpperCase(Locale.ROOT);
+        String courseCode = normalizeCourseCode(required(record.get(1), 30));
         BigDecimal credits = decimal(record.get(2));
         String letterGrade = required(record.get(3), 5).toUpperCase(Locale.ROOT);
         String semester = normalizeSemester(required(record.get(4), 80));
@@ -152,6 +152,14 @@ class AcademicLedgerSourceParser {
             case "semester 2", "semester ii" -> "Semester 2";
             default -> value;
         };
+    }
+
+    static String normalizeCourseCode(String raw) {
+        String normalized = raw.trim().toUpperCase(Locale.ROOT);
+        return normalized
+                .replace('Α', 'α')
+                .replace('Β', 'β')
+                .replace('Δ', 'δ');
     }
 
     private String required(String raw, int maxLength) {
