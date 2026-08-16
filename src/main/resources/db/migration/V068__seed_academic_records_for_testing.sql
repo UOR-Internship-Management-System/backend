@@ -1,22 +1,10 @@
--- Temporary manual test data, standing in for the real Admin ledger upload/commit pipeline (not built yet).
-INSERT INTO subjects (id, course_code, course_title, credits) VALUES
-                                                                  ('d0000000-0000-0000-0000-000000000001', 'CS4010', 'Distributed Systems', 3),
-                                                                  ('d0000000-0000-0000-0000-000000000002', 'CS4020', 'Cloud Computing', 3),
-                                                                  ('d0000000-0000-0000-0000-000000000003', 'CS4030', 'Machine Learning', 3);
-
-INSERT INTO academic_ledger_uploads (id, committed_at) VALUES
-    ('e0000000-0000-0000-0000-000000000001', NOW());
-
-INSERT INTO academic_records
-(student_id, subject_id, letter_grade, grade_point, semester, academic_year, attempt_number, result_status, source_upload_id)
-SELECT
-    s.id, 'd0000000-0000-0000-0000-000000000001', 'A', 4.00, 'Semester 1', '2023/2024', 1, 'PASS', 'e0000000-0000-0000-0000-000000000001'
-FROM eligible_students s WHERE s.index_number = 'SC/2020/00001'
-UNION ALL
-SELECT
-    s.id, 'd0000000-0000-0000-0000-000000000002', 'A-', 3.70, 'Semester 1', '2023/2024', 1, 'PASS', 'e0000000-0000-0000-0000-000000000001'
-FROM eligible_students s WHERE s.index_number = 'SC/2020/00001'
-UNION ALL
-SELECT
-    s.id, 'd0000000-0000-0000-0000-000000000003', 'B+', 3.30, 'Semester 1', '2023/2024', 1, 'PASS', 'e0000000-0000-0000-0000-000000000001'
-FROM eligible_students s WHERE s.index_number = 'SC/2020/00001';
+-- Intentionally empty.
+--
+-- The original migration attempted to install temporary manual test fixtures into
+-- a parallel public-schema academic model. It could not complete on PostgreSQL
+-- because its UNION expression supplied text values for UUID columns. Production
+-- Flyway migrations must not install test-only academic records; integration test
+-- fixtures are created by the relevant test setup instead.
+--
+-- V069 safely removes the unused parallel tables after verifying that they are
+-- empty and that the authoritative academic-schema persistence model exists.
