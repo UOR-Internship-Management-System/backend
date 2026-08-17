@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.FilterSkillCriteriaSource;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.FilterSkillMatchMode;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.entity.FilterRunEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.entity.FilterRunSkillEntity;
@@ -72,7 +73,7 @@ class CandidateFilteringPersistenceIntegrationTest {
         filterRunRepository.saveAndFlush(run);
 
         filterRunSkillRepository.saveAndFlush(
-                new FilterRunSkillEntity(runId, fixture.skillId(), "REQUEST"));
+                new FilterRunSkillEntity(runId, fixture.skillId(), FilterSkillCriteriaSource.REQUEST));
 
         FilterRunEntity persisted = filterRunRepository.findById(runId).orElseThrow();
         assertThat(persisted.getInternshipRequestId()).isEqualTo(fixture.requestId());
@@ -82,11 +83,11 @@ class CandidateFilteringPersistenceIntegrationTest {
         assertThat(persisted.getSkillMatchMode()).isEqualTo(FilterSkillMatchMode.AND);
         assertThat(persisted.getCreatedAt()).isEqualTo(createdAt);
 
-        assertThat(filterRunSkillRepository.findAllByIdFilterRunId(runId))
+        assertThat(filterRunSkillRepository.findAllByFilterRunId(runId))
                 .singleElement()
                 .satisfies(skill -> {
                     assertThat(skill.getId().getSkillId()).isEqualTo(fixture.skillId());
-                    assertThat(skill.getCriteriaSource()).isEqualTo("REQUEST");
+                    assertThat(skill.getCriteriaSource()).isEqualTo(FilterSkillCriteriaSource.REQUEST);
                 });
     }
 
