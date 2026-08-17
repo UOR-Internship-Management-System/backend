@@ -7,8 +7,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.api.dto.response.CandidateFilteringCandidateResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.api.dto.response.CandidateFilteringRunResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.application.model.CandidateFilteringCandidateCore;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.exception.FilterDependencyUnavailableException;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.exception.FilterRunNotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.CandidateFilteringCriteria;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.CandidateSort;
@@ -100,6 +102,36 @@ public class CandidateFilteringQueryService {
                 candidateCount,
                 correlationId());
         return mapper.toRunResponse(loadedRun.entity(), requestSummary, loadedRun.criteria(), candidateCount);
+    }
+
+    /**
+     * Public candidate-list contract.
+     *
+     * <p>The deterministic core result is already implemented, but the current OpenAPI response also
+     * requires latest-saved-CV and cross-shortlist facts. Those facts have no authoritative
+     * persistence in the current backend. The endpoint therefore fails closed instead of inventing
+     * values. A factual downstream enrichment implementation can replace this gate while preserving
+     * the method and HTTP contract.
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public PagedResponse<CandidateFilteringCandidateResponse> listCandidates(
+            UUID filterRunId,
+            Integer page,
+            Integer size,
+            String search,
+            String sort) {
+        // Validate authorization, paging/search/sort, and the referenced run before reporting the
+        // downstream contract dependency. This preserves stable 400/401/403/404 semantics.
+        currentAdmin();
+        int safePage = validatePage(page);
+        int safeSize = validateSize(size);
+        validateOffset(safePage, safeSize);
+        validateSearch(search);
+        CandidateSort.fromApiValue(sort);
+        loadRun(filterRunId);
+
+        throw new FilterDependencyUnavailableException(
+                "Candidate CV and shortlist enrichment data is not available from authoritative persistence.");
     }
 
     /**
