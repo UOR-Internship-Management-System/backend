@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.FilterSkillMatchMode;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.entity.FilterRunEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.entity.FilterRunSkillEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.repository.FilterRunRepository;
@@ -66,7 +67,7 @@ class CandidateFilteringPersistenceIntegrationTest {
         run.setRunByAccountId(fixture.adminAccountId());
         run.setRuntimeGpaLowerBound(new BigDecimal("2.75"));
         run.setRuntimeGpaUpperBound(new BigDecimal("4.00"));
-        run.setSkillMatchMode("AND");
+        run.setSkillMatchMode(FilterSkillMatchMode.AND);
         run.setCreatedAt(createdAt);
         filterRunRepository.saveAndFlush(run);
 
@@ -78,7 +79,7 @@ class CandidateFilteringPersistenceIntegrationTest {
         assertThat(persisted.getRunByAccountId()).isEqualTo(fixture.adminAccountId());
         assertThat(persisted.getRuntimeGpaLowerBound()).isEqualByComparingTo("2.75");
         assertThat(persisted.getRuntimeGpaUpperBound()).isEqualByComparingTo("4.00");
-        assertThat(persisted.getSkillMatchMode()).isEqualTo("AND");
+        assertThat(persisted.getSkillMatchMode()).isEqualTo(FilterSkillMatchMode.AND);
         assertThat(persisted.getCreatedAt()).isEqualTo(createdAt);
 
         assertThat(filterRunSkillRepository.findAllByIdFilterRunId(runId))

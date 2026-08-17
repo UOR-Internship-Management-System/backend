@@ -52,4 +52,37 @@ class ProblemDetailsFactoryTest {
         assertThat(response.fieldErrors()).containsExactly(fieldError);
         assertThat(response.details()).containsEntry("source", "request");
     }
+
+    @Test
+    void createsCandidateFilteringSpecificProblemDetailsTitles() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        ApiErrorResponse notFound = factory.create(
+                HttpStatus.NOT_FOUND,
+                ApiErrorCode.FILTER_RUN_NOT_FOUND,
+                "The filtering run does not exist.",
+                request,
+                null,
+                Map.of());
+        ApiErrorResponse invalid = factory.create(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                ApiErrorCode.INVALID_FILTER_CRITERIA,
+                "The GPA range or selected runtime skills are invalid.",
+                request,
+                null,
+                Map.of());
+        ApiErrorResponse unavailable = factory.create(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                ApiErrorCode.FILTER_DEPENDENCY_UNAVAILABLE,
+                "Committed academic or declared-skill data is temporarily unavailable.",
+                request,
+                null,
+                Map.of());
+
+        assertThat(notFound.type()).isEqualTo("https://uor-cv-system/errors/filter-run-not-found");
+        assertThat(notFound.title()).isEqualTo("Filter run not found");
+        assertThat(invalid.title()).isEqualTo("Invalid filtering criteria");
+        assertThat(unavailable.title()).isEqualTo("Filtering data unavailable");
+    }
+
 }
