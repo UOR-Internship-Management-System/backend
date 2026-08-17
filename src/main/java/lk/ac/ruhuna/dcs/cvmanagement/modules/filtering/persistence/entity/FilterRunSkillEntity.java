@@ -4,16 +4,19 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.FilterSkillCriteriaSource;
 
 /**
  * Normalized skill criterion attached to a filtering run.
  *
  * <p>{@code criteriaSource} preserves whether a skill was submitted through requestSkillIds or
- * additionalSkillIds so the run contract can be reconstructed exactly.
+ * additionalSkillIds so the run contract can be reconstructed deterministically.
  */
 @Entity
 @Table(name = "candidate_filter_run_skills")
@@ -22,16 +25,17 @@ public class FilterRunSkillEntity {
     @EmbeddedId
     private FilterRunSkillId id;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "criteria_source", nullable = false, length = 10)
-    private String criteriaSource;
+    private FilterSkillCriteriaSource criteriaSource;
 
     public FilterRunSkillEntity() {
         // Required by JPA.
     }
 
-    public FilterRunSkillEntity(UUID filterRunId, UUID skillId, String criteriaSource) {
+    public FilterRunSkillEntity(UUID filterRunId, UUID skillId, FilterSkillCriteriaSource criteriaSource) {
         this.id = new FilterRunSkillId(filterRunId, skillId);
-        this.criteriaSource = criteriaSource;
+        this.criteriaSource = Objects.requireNonNull(criteriaSource, "criteriaSource is required.");
     }
 
     public FilterRunSkillId getId() {
@@ -42,11 +46,11 @@ public class FilterRunSkillEntity {
         this.id = id;
     }
 
-    public String getCriteriaSource() {
+    public FilterSkillCriteriaSource getCriteriaSource() {
         return criteriaSource;
     }
 
-    public void setCriteriaSource(String criteriaSource) {
+    public void setCriteriaSource(FilterSkillCriteriaSource criteriaSource) {
         this.criteriaSource = criteriaSource;
     }
 
