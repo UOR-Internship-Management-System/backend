@@ -149,6 +149,29 @@ class CandidateFilteringQueryServiceTest {
     }
 
     @Test
+    void publicCandidateContractFailsClosedUntilAuthoritativeEnrichmentExists() {
+        assertThatThrownBy(() -> service.listCandidates(runId, 0, 20, null, "officialGpa,desc"))
+                .isInstanceOf(FilterDependencyUnavailableException.class)
+                .hasMessageContaining("CV")
+                .hasMessageContaining("shortlist")
+                .hasMessageContaining("authoritative persistence");
+
+        verify(readRepository, never()).searchCandidates(
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                any());
+    }
+
+    @Test
+    void publicCandidateContractValidatesQueryBeforeDependencyGate() {
+        assertThatThrownBy(() -> service.listCandidates(runId, -1, 20, null, null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("page");
+    }
+
+    @Test
     void coreCandidateModelDoesNotFabricateUnavailableCvOrShortlistEnrichment() {
         assertThat(java.util.Arrays.stream(CandidateFilteringCandidateCore.class.getRecordComponents())
                         .map(java.lang.reflect.RecordComponent::getName)
