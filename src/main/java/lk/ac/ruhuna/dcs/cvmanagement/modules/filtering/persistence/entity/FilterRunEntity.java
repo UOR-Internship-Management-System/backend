@@ -2,11 +2,14 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.FilterSkillMatchMode;
 
 /**
  * Immutable persistence model for one deterministic Candidate Filtering run.
@@ -33,8 +36,9 @@ public class FilterRunEntity {
     @Column(name = "runtime_gpa_upper_bound", precision = 3, scale = 2)
     private BigDecimal runtimeGpaUpperBound;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "skill_match_mode", nullable = false, length = 3)
-    private String skillMatchMode;
+    private FilterSkillMatchMode skillMatchMode;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -83,11 +87,11 @@ public class FilterRunEntity {
         this.runtimeGpaUpperBound = runtimeGpaUpperBound;
     }
 
-    public String getSkillMatchMode() {
+    public FilterSkillMatchMode getSkillMatchMode() {
         return skillMatchMode;
     }
 
-    public void setSkillMatchMode(String skillMatchMode) {
+    public void setSkillMatchMode(FilterSkillMatchMode skillMatchMode) {
         this.skillMatchMode = skillMatchMode;
     }
 
