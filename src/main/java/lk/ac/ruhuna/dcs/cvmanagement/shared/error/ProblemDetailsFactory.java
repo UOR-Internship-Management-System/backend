@@ -41,6 +41,9 @@ public class ProblemDetailsFactory {
             case INTERNSHIP_REQUEST_NOT_FOUND -> "Internship request not found";
             case DUPLICATE_REQUIRED_SKILL -> "Required skill already exists";
             case INVALID_TAXONOMY_SKILL -> "Invalid taxonomy skill";
+            case FILTER_RUN_NOT_FOUND -> "Filter run not found";
+            case INVALID_FILTER_CRITERIA -> "Invalid filtering criteria";
+            case FILTER_DEPENDENCY_UNAVAILABLE -> "Filtering data unavailable";
             case UNSUPPORTED_MEDIA_TYPE -> "Unsupported media type";
             default -> sentenceCase(status.getReasonPhrase());
         };
