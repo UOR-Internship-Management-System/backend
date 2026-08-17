@@ -1,6 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.shared.audit;
 
-/** Stable event names for Admin-critical Company and Internship Request mutations. */
+/** Stable event names for Admin-critical persisted mutations. */
 public enum AuditEventType {
     COMPANY_CREATED,
     COMPANY_UPDATED,
@@ -10,5 +10,6 @@ public enum AuditEventType {
     INTERNSHIP_REQUEST_DELETED,
     INTERNSHIP_REQUIRED_SKILL_ADDED,
     INTERNSHIP_REQUIRED_SKILL_REMOVED,
-    INTERNSHIP_REQUIRED_SKILLS_REPLACED
+    INTERNSHIP_REQUIRED_SKILLS_REPLACED,
+    CANDIDATE_FILTER_RUN_CREATED
 }
