@@ -22,7 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    private static final int LATEST_MIGRATION_COUNT = 43;
+    private static final int LATEST_MIGRATION_COUNT = 45;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -73,6 +73,11 @@ class FlywayMigrationTest {
         assertThat(tableExists("public", "companies")).isTrue();
         assertThat(tableExists("public", "internship_requests")).isTrue();
         assertThat(tableExists("public", "internship_request_skills")).isTrue();
+        assertThat(tableExists("public", "candidate_filter_runs")).isTrue();
+        assertThat(tableExists("public", "candidate_filter_run_skills")).isTrue();
+        assertThat(tableExists("public", "candidate_filter_run_candidates")).isFalse();
+        assertThat(columnExists("public", "candidate_filter_runs", "result_count")).isFalse();
+        assertThat(columnExists("public", "candidate_filter_runs", "metadata")).isFalse();
         assertThat(columnExists("public", "companies", "active")).isFalse();
         assertThat(columnExists("public", "internship_requests", "status")).isFalse();
         assertThat(columnExists("public", "internship_requests", "minimum_gpa")).isFalse();
@@ -99,6 +104,30 @@ class FlywayMigrationTest {
                         "SELECT EXISTS (SELECT 1 FROM pg_indexes "
                                 + "WHERE schemaname = 'public' "
                                 + "AND indexname = 'idx_internship_request_skills_skill_id')",
+                        Boolean.class))
+                .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT EXISTS (SELECT 1 FROM pg_indexes "
+                                + "WHERE schemaname = 'public' "
+                                + "AND indexname = 'idx_candidate_filter_runs_request_created_at_id')",
+                        Boolean.class))
+                .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT EXISTS (SELECT 1 FROM pg_indexes "
+                                + "WHERE schemaname = 'public' "
+                                + "AND indexname = 'idx_candidate_filter_run_skills_skill_run')",
+                        Boolean.class))
+                .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT EXISTS (SELECT 1 FROM pg_indexes "
+                                + "WHERE schemaname = 'public' "
+                                + "AND indexname = 'idx_student_declared_skills_skill_student')",
+                        Boolean.class))
+                .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT EXISTS (SELECT 1 FROM pg_indexes "
+                                + "WHERE schemaname = 'academic' "
+                                + "AND indexname = 'idx_student_academic_summary_gpa_student')",
                         Boolean.class))
                 .isTrue();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ref.grade_scale", Integer.class)).isEqualTo(13);
