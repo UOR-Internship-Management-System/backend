@@ -45,7 +45,13 @@ class ModuleDependencyRulesTest {
             ROOT_PACKAGE + ".config.");
 
     private static final Set<String> SPRINT_2_ALLOWED_MODULE_IMPORTS = Set.of(
-            "auth->verification");
+            "auth->verification",
+            "academics->studentprofile",
+            "cv->studentprofile",
+            "cv->academics",
+            "cv->projects",
+            "cv->skills",
+            "studentprofile->cv");
 
     /** Annotation patterns that would expose accidental endpoints. */
     private static final Pattern ENDPOINT_ANNOTATION = Pattern.compile(
@@ -157,10 +163,9 @@ class ModuleDependencyRulesTest {
     void futureModuleControllersDoNotExposeEndpoints() throws IOException {
         List<String> violations = new ArrayList<>();
 
-        // Modules with approved HTTP endpoints in the current codebase.
         Set<String> activeModules = Set.of(
                 "health", "auth", "verification", "studentprofile", "admindashboard", "skills", "academics",
-                "adminstudents", "companies", "internships");
+                "adminstudents", "companies", "internships", "projects", "cv");
 
         for (String moduleName : MODULE_NAMES) {
             if (activeModules.contains(moduleName)) {

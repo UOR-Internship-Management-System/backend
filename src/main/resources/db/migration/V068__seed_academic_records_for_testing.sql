@@ -1,0 +1,10 @@
+-- Intentionally empty.
+--
+-- The original migration attempted to install temporary manual test fixtures into
+-- a parallel public-schema academic model. It could not complete on PostgreSQL
+-- because its UNION expression supplied text values for UUID columns. Production
+-- Flyway migrations must not install test-only academic records; integration test
+-- fixtures are created by the relevant test setup instead.
+--
+-- V069 safely removes the unused parallel tables after verifying that they are
+-- empty and that the authoritative academic-schema persistence model exists.

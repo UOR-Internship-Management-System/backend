@@ -4,7 +4,6 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
-import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.api.dto.response.IndividualSkillResponse;
 
 public record ProjectResponse(
     UUID projectId,
@@ -14,7 +13,7 @@ public record ProjectResponse(
     String demoUrl,
     LocalDate startDate,
     LocalDate endDate,
-    List<IndividualSkillResponse> skills,
+    List<ProjectSkillResponse> skills,
     boolean includeInCv,
     long version,
     OffsetDateTime createdAt,

@@ -22,7 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    private static final int LATEST_MIGRATION_COUNT = 37;
+    private static final int LATEST_MIGRATION_COUNT = 43;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -65,6 +65,9 @@ class FlywayMigrationTest {
         assertThat(tableExists("academic", "official_student_grade")).isTrue();
         assertThat(tableExists("academic", "student_academic_summary")).isTrue();
         assertThat(tableExists("academic", "subject")).isTrue();
+        assertThat(tableExists("public", "academic_records")).isFalse();
+        assertThat(tableExists("public", "academic_ledger_uploads")).isFalse();
+        assertThat(tableExists("public", "subjects")).isFalse();
         assertThat(tableExists("ref", "grade_scale")).isTrue();
         assertThat(tableExists("system", "file_asset")).isTrue();
         assertThat(tableExists("public", "companies")).isTrue();
@@ -98,10 +101,47 @@ class FlywayMigrationTest {
                                 + "AND indexname = 'idx_internship_request_skills_skill_id')",
                         Boolean.class))
                 .isTrue();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ref.grade_scale", Integer.class)).isEqualTo(12);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ref.grade_scale", Integer.class)).isEqualTo(13);
         assertThat(jdbc.queryForObject(
                         "SELECT grade_point FROM ref.grade_scale WHERE grade_code = 'A-'", java.math.BigDecimal.class))
                 .isEqualByComparingTo("3.70");
+        assertThat(jdbc.queryForObject(
+                        "SELECT grade_point FROM ref.grade_scale WHERE grade_code = 'E*'", java.math.BigDecimal.class))
+                .isEqualByComparingTo("0.00");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM academic.subject", Integer.class)).isEqualTo(44);
+        assertThat(jdbc.queryForObject(
+                        "SELECT credits FROM academic.subject WHERE course_code = 'CSC1213'",
+                        java.math.BigDecimal.class))
+                .isEqualByComparingTo("3.0");
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM academic.subject "
+                                + "WHERE course_code IN ('CSC3133', 'CSC3152', 'CSC3162', 'CSC4282')",
+                        Integer.class))
+                .isEqualTo(4);
+    }
+
+    @Test
+    void version69RefusesToDeleteParallelAcademicData() {
+        Flyway throughVersion68 = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .target("68")
+                .load();
+
+        assertThat(throughVersion68.migrate().success).isTrue();
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        jdbc.update("""
+                INSERT INTO public.subjects (course_code, course_title, credits)
+                VALUES ('LEGACY001', 'Unreconciled legacy subject', 3.0)
+                """);
+
+        assertThatThrownBy(() -> flyway().migrate())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("V069 preflight failed")
+                .hasMessageContaining("subjects=1");
+
+        assertThat(tableExists("public", "subjects")).isTrue();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM public.subjects", Integer.class)).isEqualTo(1);
     }
 
 

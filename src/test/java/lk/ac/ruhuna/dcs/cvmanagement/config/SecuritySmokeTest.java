@@ -65,6 +65,19 @@ class SecuritySmokeTest {
     }
 
     @Test
+    void studentProjectRoutesRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/me/projects"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminRoleCannotManageStudentProjects() throws Exception {
+        mockMvc.perform(get("/api/v1/me/projects"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @WithMockUser(roles = "STUDENT")
     void studentRoleCannotAccessCompanyAdminRoutes() throws Exception {
         mockMvc.perform(get("/api/v1/admin/companies"))

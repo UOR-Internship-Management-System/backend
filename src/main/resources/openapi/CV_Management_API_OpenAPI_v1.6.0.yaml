@@ -53,7 +53,9 @@ info:
         description: Positive attempt number.
       - name: result_status
         required: true
-        description: Official result status such as PASSED or FAILED.
+        description:
+          Closed official result status. Use PASSED for A+ through C, FAILED for C- through E,
+          and ABSENT only for E*.
     derivedFields:
       - studentId
       - courseTitle
@@ -7935,6 +7937,25 @@ components:
         - description: Updated project summary with improved accessibility and validation coverage.
           demoUrl: https://example.test/accessible-internship-portal
           includeInCv: true
+    ProjectSkillResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - skillId
+        - name
+      properties:
+        skillId:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          minLength: 1
+        description:
+          type:
+            - string
+            - 'null'
+      description: Project-owned view of one normalized taxonomy skill; wire fields remain unchanged.
     ProjectResponse:
       type: object
       additionalProperties: false
@@ -7989,7 +8010,7 @@ components:
           type: array
           uniqueItems: true
           items:
-            $ref: '#/components/schemas/IndividualSkillResponse'
+            $ref: '#/components/schemas/ProjectSkillResponse'
           description: Normalized taxonomy skills linked to this portfolio project.
         includeInCv:
           type: boolean
