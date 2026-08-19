@@ -2,6 +2,7 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -15,6 +16,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSourceFresh
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSourceFreshnessRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 class CvSourceFreshnessUpdaterTest {
 
@@ -39,4 +41,20 @@ class CvSourceFreshnessUpdaterTest {
         verify(repository).upsertProjectsChangedAt(studentId, changedAt);
         verify(repository).upsertAcademicRecordsChangedAt(studentId, changedAt);
     }
+    @Test
+    void acquiresFreshnessLockBeforePublishingChangedTimestamp() {
+        CvSourceFreshnessRepository repository = mock(CvSourceFreshnessRepository.class);
+        UUID studentId = UUID.randomUUID();
+        when(repository.findForUpdate(studentId))
+                .thenReturn(Optional.of(mock(CvSourceFreshnessEntity.class)));
+        CvSourceFreshnessUpdater updater = new CvSourceFreshnessUpdater(repository, Clock.fixed(NOW, ZoneOffset.UTC));
+
+        updater.markChanged(studentId, CvSourceArea.PROFILE);
+
+        InOrder order = inOrder(repository);
+        order.verify(repository).ensureRow(studentId);
+        order.verify(repository).findForUpdate(studentId);
+        order.verify(repository).upsertProfileChangedAt(studentId, OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC));
+    }
+
 }

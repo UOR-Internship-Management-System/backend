@@ -77,7 +77,7 @@ public class AuditEventPublisher {
                 CorrelationIdContext.current().orElse(null));
     }
 
-    private void recordBestEffort(
+    public void recordBestEffort(
             UUID actorUserId,
             String actorRole,
             String eventType,

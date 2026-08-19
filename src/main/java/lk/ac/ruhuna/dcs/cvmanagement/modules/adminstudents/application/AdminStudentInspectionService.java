@@ -29,6 +29,9 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileRes
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.LatestSavedCvQuery;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ApiErrorCode;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ApplicationException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
@@ -132,11 +135,26 @@ public class AdminStudentInspectionService {
     public ActiveCvFileResolver.ResolvedCvFile downloadLatestCv(UUID studentId) {
         CurrentActor actor = currentAdmin();
         UUID safeStudentId = requireRegisteredStudent(studentId);
-        var file = activeCvFileResolver.resolve(safeStudentId);
+        ActiveCvFileResolver.ResolvedCvFile file;
+        try {
+            file = activeCvFileResolver.resolve(safeStudentId);
+        } catch (ApplicationException exception) {
+            if (exception.getErrorCode() == ApiErrorCode.CV_FILE_UNAVAILABLE) {
+                auditEventPublisher.recordBestEffort(
+                        actor.userId(),
+                        "ADMIN",
+                        AuditEventType.CV_FILE_UNAVAILABLE.name(),
+                        AuditEventCategory.CV_MANAGEMENT,
+                        "STUDENT_CV",
+                        safeStudentId.toString(),
+                        Map.of());
+            }
+            throw exception;
+        }
         auditEventPublisher.recordRequired(
                 actor.userId(),
                 "ADMIN",
-                "CV_DOWNLOADED_BY_ADMIN",
+                AuditEventType.CV_DOWNLOADED_BY_ADMIN.name(),
                 AuditEventCategory.CV_MANAGEMENT,
                 "CV",
                 file.cvId().toString(),

@@ -25,6 +25,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.S
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
@@ -186,7 +187,7 @@ public class CvSaveService {
         preview.setResultRevision(saved.getRevision());
         previewRepository.save(preview);
 
-        String eventType = nextRevision == 1 ? "CV_SAVED" : "CV_UPDATED";
+        String eventType = nextRevision == 1 ? AuditEventType.CV_SAVED.name() : AuditEventType.CV_UPDATED.name();
         auditEventPublisher.recordRequired(
                 actor.userId(),
                 "STUDENT",

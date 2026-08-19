@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Map;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStorageException;
 import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
@@ -15,8 +16,12 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvConfiguration;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvPreviewEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +40,7 @@ public class CvPreviewService {
     private final FileStoragePort cvFileStorage;
     private final CvPreviewPersistenceService persistenceService;
     private final CvFreshnessService freshnessService;
+    private final AuditEventPublisher auditEventPublisher;
     private final Clock clock;
     private final Duration previewTtl;
 
@@ -48,6 +54,7 @@ public class CvPreviewService {
             @Qualifier("cvFileStorage") FileStoragePort cvFileStorage,
             CvPreviewPersistenceService persistenceService,
             CvFreshnessService freshnessService,
+            AuditEventPublisher auditEventPublisher,
             Clock clock,
             @Value("${app.cv.preview-ttl:PT15M}") Duration previewTtl) {
         this.currentActorProvider = currentActorProvider;
@@ -59,6 +66,7 @@ public class CvPreviewService {
         this.cvFileStorage = cvFileStorage;
         this.persistenceService = persistenceService;
         this.freshnessService = freshnessService;
+        this.auditEventPublisher = auditEventPublisher;
         this.clock = clock;
         this.previewTtl = previewTtl;
     }
@@ -68,12 +76,19 @@ public class CvPreviewService {
      * Only the final preview metadata + selection snapshot is committed atomically.
      */
     public CvPreviewResponse createPreview(CvPreviewRequest request) {
-        StudentEntity student = currentStudent();
+        CurrentActor actor = currentActor();
+        StudentEntity student = currentStudent(actor.userId());
         CvConfiguration configuration = CvConfiguration.from(request);
         var document = sourceQueryService.load(student, configuration);
         String sourceFingerprint = fingerprintService.fingerprint(document);
         String htmlPreview = htmlRenderer.render(document);
-        byte[] pdf = generationService.generatePdf(document);
+        byte[] pdf;
+        try {
+            pdf = generationService.generatePdf(document);
+        } catch (CvGenerationFailedException exception) {
+            auditGenerationFailure(actor, student);
+            throw exception;
+        }
 
         OffsetDateTime generatedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         OffsetDateTime expiresAt = generatedAt.plus(previewTtl);
@@ -85,10 +100,12 @@ public class CvPreviewService {
         try {
             stored = cvFileStorage.store(storageKey, new ByteArrayInputStream(pdf));
         } catch (FileStorageException exception) {
+            auditGenerationFailure(actor, student);
             throw new CvGenerationFailedException();
         }
         if (stored.sizeBytes() != pdf.length || stored.sizeBytes() < 1) {
             deleteQuietly(storageKey);
+            auditGenerationFailure(actor, student);
             throw new CvGenerationFailedException();
         }
 
@@ -111,6 +128,15 @@ public class CvPreviewService {
             throw exception;
         }
 
+        auditEventPublisher.recordBestEffort(
+                actor.userId(),
+                "STUDENT",
+                AuditEventType.CV_PREVIEW_GENERATED.name(),
+                AuditEventCategory.CV_MANAGEMENT,
+                "CV_PREVIEW",
+                previewId.toString(),
+                Map.of("studentId", student.getId().toString(), "fileSizeBytes", stored.sizeBytes()));
+
         return new CvPreviewResponse(
                 previewId,
                 htmlPreview,
@@ -118,6 +144,17 @@ public class CvPreviewService {
                 configuration.toResponse(),
                 generatedAt,
                 expiresAt);
+    }
+
+    private void auditGenerationFailure(CurrentActor actor, StudentEntity student) {
+        auditEventPublisher.recordBestEffort(
+                actor.userId(),
+                "STUDENT",
+                AuditEventType.CV_GENERATION_FAILED.name(),
+                AuditEventCategory.CV_MANAGEMENT,
+                "STUDENT_CV",
+                student.getId().toString(),
+                Map.of());
     }
 
     private String storageKey(UUID previewId, OffsetDateTime generatedAt) {
@@ -133,10 +170,13 @@ public class CvPreviewService {
         }
     }
 
-    private StudentEntity currentStudent() {
-        var actor = currentActorProvider.currentActor()
+    private CurrentActor currentActor() {
+        return currentActorProvider.currentActor()
                 .orElseThrow(() -> new ForbiddenException("No authenticated Student context."));
-        return studentRepository.findByUserAccountId(actor.userId())
+    }
+
+    private StudentEntity currentStudent(UUID accountId) {
+        return studentRepository.findByUserAccountId(accountId)
                 .orElseThrow(() -> new NotFoundException("Student record not found for the authenticated account."));
     }
 }
