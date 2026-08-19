@@ -1,0 +1,2796 @@
+diff --git a/.env.example b/.env.example
+index 724de52..6858801 100644
+--- a/.env.example
++++ b/.env.example
+@@ -15,3 +15,14 @@ FRONTEND_ORIGIN=http://localhost:5173
+ ACADEMIC_LEDGER_STORAGE_ROOT=./data/academic-ledger
+ ACADEMIC_LEDGER_MAX_FILE_SIZE_BYTES=5242880
+ ACADEMIC_LEDGER_RETRY_AFTER_SECONDS=2
++
++# Generated CV PDF storage and XeLaTeX runtime
++CV_STORAGE_ROOT=./data/cv
++CV_LATEX_COMMAND=xelatex
++CV_LATEX_TIMEOUT=PT10S
++CV_PDF_MAX_BYTES=5242880
++CV_PDF_MAX_CONCURRENT=2
++CV_PREVIEW_TTL=PT15M
++CV_CONSUMED_PREVIEW_RETENTION=PT24H
++CV_CLEANUP_POLL_DELAY_MS=60000
++CV_ORPHAN_GRACE_PERIOD=PT1H
+diff --git a/docker/Dockerfile b/docker/Dockerfile
+index d989555..1d3bfb6 100644
+--- a/docker/Dockerfile
++++ b/docker/Dockerfile
+@@ -3,31 +3,33 @@ FROM eclipse-temurin:21-jdk-alpine AS build
+ 
+ WORKDIR /workspace
+ 
+-# Copy Maven wrapper and POM first for dependency caching
+ COPY mvnw pom.xml ./
+ COPY .mvn .mvn
+-
+-# Download dependencies (cached unless pom.xml changes)
+ RUN ./mvnw -B dependency:resolve dependency:resolve-plugins -DskipTests
+ 
+-# Copy source and build
+ COPY src src
+ RUN ./mvnw -B package -DskipTests && \
+     mv target/*.jar target/app.jar
+ 
+ # ---- Runtime Stage ----
+-FROM eclipse-temurin:21-jre-alpine AS runtime
+-
+-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
++# Ubuntu/Jammy is used here because the production CV generator requires a supported XeLaTeX runtime.
++FROM eclipse-temurin:21-jre-jammy AS runtime
++
++RUN apt-get update \
++    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
++        texlive-xetex \
++        texlive-latex-base \
++        fonts-lmodern \
++    && rm -rf /var/lib/apt/lists/* \
++    && groupadd --system appgroup \
++    && useradd --system --gid appgroup --home-dir /app --shell /usr/sbin/nologin appuser
+ 
+ WORKDIR /app
+-
+ COPY --from=build /workspace/target/app.jar app.jar
+ 
+-RUN chown -R appuser:appgroup /app
++RUN mkdir -p /app/data/cv /app/data/academic-ledger \
++    && chown -R appuser:appgroup /app
+ 
+ USER appuser
+-
+ EXPOSE 8080
+-
+ ENTRYPOINT ["java", "-jar", "app.jar"]
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/config/CvInfrastructureConfig.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/config/CvInfrastructureConfig.java
+new file mode 100644
+index 0000000..2426a4d
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/config/CvInfrastructureConfig.java
+@@ -0,0 +1,22 @@
++package lk.ac.ruhuna.dcs.cvmanagement.config;
++
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex.LatexProperties;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.LocalFileStorageAdapter;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.config.CvStorageProperties;
++import org.springframework.beans.factory.annotation.Qualifier;
++import org.springframework.boot.context.properties.EnableConfigurationProperties;
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Configuration;
++
++/** CV-specific infrastructure wiring. The storage root is isolated from Academic Ledger files. */
++@Configuration
++@EnableConfigurationProperties({CvStorageProperties.class, LatexProperties.class})
++public class CvInfrastructureConfig {
++
++    @Bean
++    @Qualifier("cvFileStorage")
++    public FileStoragePort cvFileStorage(CvStorageProperties properties) {
++        return new LocalFileStorageAdapter(properties.root());
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/config/StorageConfig.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/config/StorageConfig.java
+index de05664..e2f9888 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/config/StorageConfig.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/config/StorageConfig.java
+@@ -1,11 +1,21 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.config;
+ 
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.LocalFileStorageAdapter;
+ import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.StorageProperties;
+ import org.springframework.boot.context.properties.EnableConfigurationProperties;
++import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
++import org.springframework.context.annotation.Primary;
+ 
+-/** Enables strongly typed durable-storage configuration. */
++/** Enables strongly typed durable storage for Academic Ledger without sharing its root with CV PDFs. */
+ @Configuration
+ @EnableConfigurationProperties(StorageProperties.class)
+ public class StorageConfig {
++
++    @Bean
++    @Primary
++    public FileStoragePort academicFileStorage(StorageProperties properties) {
++        return new LocalFileStorageAdapter(properties);
++    }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexCompilationException.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexCompilationException.java
+index 4d17663..88a8c38 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexCompilationException.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexCompilationException.java
+@@ -1,8 +1,12 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex;
+ 
+-/**
+- * Exception thrown when LaTeX compilation fails.
+- * <p>Activated only in the sprint that implements the approved behavior.
+- */
+-public class LatexCompilationException {
++/** Internal generation failure. Compiler output and temporary paths must never cross the API boundary. */
++public class LatexCompilationException extends RuntimeException {
++    public LatexCompilationException(String message) {
++        super(message);
++    }
++
++    public LatexCompilationException(String message, Throwable cause) {
++        super(message, cause);
++    }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexCvRenderer.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexCvRenderer.java
+index 0649c10..a7be58c 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexCvRenderer.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexCvRenderer.java
+@@ -1,8 +1,203 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex;
+ 
+-/**
+- * Service for rendering CV data into LaTeX documents.
+- * <p>Activated only in the sprint that implements the approved behavior.
+- */
++import java.math.BigDecimal;
++import java.time.LocalDate;
++import java.time.format.DateTimeFormatter;
++import java.util.List;
++import java.util.Locale;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvDocumentModel;
++import org.springframework.stereotype.Component;
++
++/** Renders the canonical CV document model into a single-column ATS-oriented LaTeX document. */
++@Component
+ public class LatexCvRenderer {
++
++    public static final String TEMPLATE_VERSION = "ATS-TEMPLATE-V1";
++    private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM uuuu", Locale.ENGLISH);
++
++    public String render(CvDocumentModel model) {
++        StringBuilder body = new StringBuilder(4096);
++        renderHeader(body, model);
++        renderSummary(body, model.profile());
++        renderSkills(body, model.declaredSkills());
++        renderExperiences(body, model.experiences());
++        renderProjects(body, model.projects());
++        renderCertificates(body, model.certificates());
++        renderAwards(body, model.awards());
++        renderActivities(body, model.activities());
++        renderAcademics(body, model.academicSummary());
++
++        return """
++                \\documentclass[10pt,a4paper]{article}
++                \\usepackage[margin=1.55cm]{geometry}
++                \\usepackage{fontspec}
++                \\setlength{\\parindent}{0pt}
++                \\setlength{\\parskip}{3pt}
++                \\pagestyle{empty}
++                \\newcommand{\\cvsection}[1]{\\vspace{5pt}{\\large\\bfseries #1}\\par\\vspace{2pt}\\hrule\\vspace{4pt}}
++                \\begin{document}
++                %s
++                \\end{document}
++                """.formatted(body);
++    }
++
++    private void renderHeader(StringBuilder out, CvDocumentModel model) {
++        String name = firstNonBlank(
++                model.profile() == null ? null : model.profile().displayName(),
++                model.identity().fullName());
++        out.append("{\\LARGE\\bfseries ").append(escape(name)).append("}\\par\n");
++        appendLine(out, joinNonBlank(" | ",
++                model.identity().universityEmail(),
++                model.profile() == null ? null : model.profile().personalEmail(),
++                model.profile() == null ? null : model.profile().phone(),
++                model.profile() == null ? null : model.profile().location()));
++        for (CvDocumentModel.ContactLink link : model.contactLinks()) {
++            appendLine(out, joinNonBlank(": ", link.label(), link.url()));
++        }
++    }
++
++    private void renderSummary(StringBuilder out, CvDocumentModel.Profile profile) {
++        if (profile == null) return;
++        if (hasText(profile.headline()) || hasText(profile.summary())) {
++            section(out, "Professional Summary");
++            appendLine(out, profile.headline());
++            appendLine(out, profile.summary());
++        }
++    }
++
++    private void renderSkills(StringBuilder out, List<CvDocumentModel.DeclaredSkill> skills) {
++        if (skills.isEmpty()) return;
++        section(out, "Skills");
++        appendLine(out, skills.stream().map(CvDocumentModel.DeclaredSkill::skillName).filter(this::hasText).toList(), ", ");
++    }
++
++    private void renderExperiences(StringBuilder out, List<CvDocumentModel.Experience> items) {
++        if (items.isEmpty()) return;
++        section(out, "Work Experience");
++        for (var item : items) {
++            boldLine(out, joinNonBlank(" — ", item.positionTitle(), item.organization()));
++            appendLine(out, joinNonBlank(" | ", formatRange(item.startDate(), item.endDate(), item.currentRole()), item.location()));
++            appendLine(out, item.description());
++        }
++    }
++
++    private void renderProjects(StringBuilder out, List<CvDocumentModel.Project> items) {
++        if (items.isEmpty()) return;
++        section(out, "Projects");
++        for (var item : items) {
++            boldLine(out, item.title());
++            appendLine(out, formatRange(item.startDate(), item.endDate(), false));
++            appendLine(out, item.description());
++            if (!item.skills().isEmpty()) {
++                appendLine(out, "Skills: " + item.skills().stream().map(CvDocumentModel.ProjectSkill::skillName).filter(this::hasText).reduce((a,b) -> a + ", " + b).orElse(""));
++            }
++            appendLine(out, item.repositoryUrl());
++            appendLine(out, item.demoUrl());
++        }
++    }
++
++    private void renderCertificates(StringBuilder out, List<CvDocumentModel.Certificate> items) {
++        if (items.isEmpty()) return;
++        section(out, "Certificates");
++        for (var item : items) {
++            boldLine(out, joinNonBlank(" — ", item.title(), item.issuer()));
++            appendLine(out, formatDate(item.issueDate()));
++            appendLine(out, item.credentialUrl());
++        }
++    }
++
++    private void renderAwards(StringBuilder out, List<CvDocumentModel.Award> items) {
++        if (items.isEmpty()) return;
++        section(out, "Awards and Honors");
++        for (var item : items) {
++            boldLine(out, joinNonBlank(" — ", item.title(), item.issuer()));
++            appendLine(out, formatDate(item.awardDate()));
++            appendLine(out, item.description());
++        }
++    }
++
++    private void renderActivities(StringBuilder out, List<CvDocumentModel.Activity> items) {
++        if (items.isEmpty()) return;
++        section(out, "Extracurricular Activities");
++        for (var item : items) {
++            boldLine(out, joinNonBlank(" — ", item.activityName(), item.roleTitle()));
++            appendLine(out, formatRange(item.startDate(), item.endDate(), item.endDate() == null && item.startDate() != null));
++            appendLine(out, item.description());
++        }
++    }
++
++    private void renderAcademics(StringBuilder out, CvDocumentModel.AcademicSummary summary) {
++        if (summary == null) return;
++        section(out, "Academic Summary");
++        if (summary.computerScienceGpa() != null) appendLine(out, "Computer Science GPA: " + decimal(summary.computerScienceGpa()));
++        if (summary.totalCredits() != null) appendLine(out, "Completed Credits: " + decimal(summary.totalCredits()));
++    }
++
++    private void section(StringBuilder out, String title) {
++        out.append("\\cvsection{").append(escape(title)).append("}\n");
++    }
++
++    private void boldLine(StringBuilder out, String text) {
++        if (hasText(text)) out.append("\\textbf{").append(escape(text)).append("}\\par\n");
++    }
++
++    private void appendLine(StringBuilder out, String text) {
++        if (hasText(text)) out.append(escape(text)).append("\\par\n");
++    }
++
++    private void appendLine(StringBuilder out, List<String> values, String delimiter) {
++        String joined = values.stream().filter(this::hasText).reduce((a,b) -> a + delimiter + b).orElse("");
++        appendLine(out, joined);
++    }
++
++    private String formatRange(LocalDate start, LocalDate end, boolean current) {
++        String left = formatDate(start);
++        String right = current ? "Present" : formatDate(end);
++        return joinNonBlank(" -- ", left, right);
++    }
++
++    private String formatDate(LocalDate value) {
++        return value == null ? "" : DATE.format(value);
++    }
++
++    private String decimal(BigDecimal value) {
++        return value.stripTrailingZeros().toPlainString();
++    }
++
++    private String firstNonBlank(String first, String second) {
++        return hasText(first) ? first : (second == null ? "" : second);
++    }
++
++    private String joinNonBlank(String delimiter, String... values) {
++        return java.util.Arrays.stream(values).filter(this::hasText).reduce((a,b) -> a + delimiter + b).orElse("");
++    }
++
++    private boolean hasText(String value) {
++        return value != null && !value.isBlank();
++    }
++
++    /** Escapes TeX metacharacters and strips control characters while preserving ordinary Unicode text. */
++    public String escape(String value) {
++        if (value == null) return "";
++        StringBuilder out = new StringBuilder(value.length() + 16);
++        for (int i = 0; i < value.length(); i++) {
++            char ch = value.charAt(i);
++            if (Character.isISOControl(ch) && ch != '\n' && ch != '\t') continue;
++            switch (ch) {
++                case '\\' -> out.append("\\textbackslash{}");
++                case '{' -> out.append("\\{");
++                case '}' -> out.append("\\}");
++                case '$' -> out.append("\\$");
++                case '&' -> out.append("\\&");
++                case '#' -> out.append("\\#");
++                case '%' -> out.append("\\%");
++                case '_' -> out.append("\\_");
++                case '~' -> out.append("\\textasciitilde{}");
++                case '^' -> out.append("\\textasciicircum{}");
++                case '\n', '\r', '\t' -> out.append(' ');
++                default -> out.append(ch);
++            }
++        }
++        return out.toString();
++    }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexProperties.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexProperties.java
+new file mode 100644
+index 0000000..6f96fcb
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/LatexProperties.java
+@@ -0,0 +1,29 @@
++package lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex;
++
++import java.time.Duration;
++import org.springframework.boot.context.properties.ConfigurationProperties;
++
++/** Bounded external-process settings for backend-controlled XeLaTeX compilation. */
++@ConfigurationProperties(prefix = "app.cv.latex")
++public record LatexProperties(
++        String command,
++        Duration timeout,
++        long maxOutputBytes,
++        int maxConcurrentGenerations) {
++
++    public LatexProperties {
++        command = command == null || command.isBlank() ? "xelatex" : command.trim();
++        timeout = timeout == null ? Duration.ofSeconds(10) : timeout;
++        if (timeout.isZero() || timeout.isNegative() || timeout.compareTo(Duration.ofMinutes(1)) > 0) {
++            throw new IllegalArgumentException("app.cv.latex.timeout must be between 1 ms and 1 minute.");
++        }
++        if (maxOutputBytes == 0) maxOutputBytes = 5L * 1024L * 1024L;
++        if (maxConcurrentGenerations == 0) maxConcurrentGenerations = 2;
++        if (maxOutputBytes < 1024 || maxOutputBytes > 50L * 1024L * 1024L) {
++            throw new IllegalArgumentException("app.cv.latex.max-output-bytes must be between 1 KiB and 50 MiB.");
++        }
++        if (maxConcurrentGenerations < 1 || maxConcurrentGenerations > 16) {
++            throw new IllegalArgumentException("app.cv.latex.max-concurrent-generations must be between 1 and 16.");
++        }
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/PdfGenerationService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/PdfGenerationService.java
+index 4b87540..b0e26f0 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/PdfGenerationService.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/latex/PdfGenerationService.java
+@@ -1,8 +1,125 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex;
+ 
+-/**
+- * Service for generating PDF files from LaTeX source.
+- * <p>Activated only in the sprint that implements the approved behavior.
+- */
++import java.io.ByteArrayOutputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.time.Duration;
++import java.util.Comparator;
++import java.util.concurrent.Executors;
++import java.util.concurrent.Future;
++import java.util.concurrent.Semaphore;
++import java.util.concurrent.TimeUnit;
++import org.springframework.stereotype.Component;
++
++/** Executes XeLaTeX in an isolated temporary directory with strict resource and output bounds. */
++@Component
+ public class PdfGenerationService {
++
++    private static final int MAX_DIAGNOSTIC_BYTES = 64 * 1024;
++    private final LatexProperties properties;
++    private final Semaphore permits;
++
++    public PdfGenerationService(LatexProperties properties) {
++        this.properties = properties;
++        this.permits = new Semaphore(properties.maxConcurrentGenerations(), true);
++    }
++
++    public byte[] compile(String latexSource) {
++        boolean acquired = false;
++        Path workDir = null;
++        try {
++            acquired = permits.tryAcquire(properties.timeout().toMillis(), TimeUnit.MILLISECONDS);
++            if (!acquired) throw new LatexCompilationException("CV generation capacity is temporarily unavailable.");
++
++            workDir = Files.createTempDirectory("cv-latex-");
++            Path source = workDir.resolve("cv.tex");
++            Files.writeString(source, latexSource, StandardCharsets.UTF_8);
++
++            ProcessBuilder builder = new ProcessBuilder(
++                    properties.command(),
++                    "-no-shell-escape",
++                    "-interaction=nonstopmode",
++                    "-halt-on-error",
++                    "-file-line-error",
++                    "-output-directory=" + workDir.toAbsolutePath(),
++                    source.toAbsolutePath().toString());
++            builder.directory(workDir.toFile());
++            builder.redirectErrorStream(true);
++
++            Process process = builder.start();
++            try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
++                Future<String> diagnostics = executor.submit(() -> drainDiagnostics(process.getInputStream()));
++                boolean finished = process.waitFor(properties.timeout().toMillis(), TimeUnit.MILLISECONDS);
++                if (!finished) {
++                    terminateProcessTree(process);
++                    throw new LatexCompilationException("XeLaTeX exceeded the configured generation timeout.");
++                }
++                String diagnosticText = diagnostics.get(2, TimeUnit.SECONDS);
++                if (process.exitValue() != 0) {
++                    throw new LatexCompilationException("XeLaTeX compilation failed: " + summarize(diagnosticText));
++                }
++            }
++
++            Path pdf = workDir.resolve("cv.pdf");
++            if (!Files.isRegularFile(pdf)) throw new LatexCompilationException("XeLaTeX did not produce a PDF.");
++            long size = Files.size(pdf);
++            if (size < 5 || size > properties.maxOutputBytes()) {
++                throw new LatexCompilationException("Generated PDF is outside the configured size bounds.");
++            }
++            byte[] bytes = Files.readAllBytes(pdf);
++            if (bytes.length > properties.maxOutputBytes()
++                    || bytes[0] != '%' || bytes[1] != 'P' || bytes[2] != 'D' || bytes[3] != 'F' || bytes[4] != '-') {
++                throw new LatexCompilationException("Generated output is not a valid PDF artifact.");
++            }
++            return bytes;
++        } catch (InterruptedException exception) {
++            Thread.currentThread().interrupt();
++            throw new LatexCompilationException("CV generation was interrupted.", exception);
++        } catch (LatexCompilationException exception) {
++            throw exception;
++        } catch (Exception exception) {
++            throw new LatexCompilationException("CV PDF generation failed.", exception);
++        } finally {
++            if (workDir != null) deleteRecursively(workDir);
++            if (acquired) permits.release();
++        }
++    }
++
++    private String drainDiagnostics(InputStream input) throws IOException {
++        ByteArrayOutputStream retained = new ByteArrayOutputStream(MAX_DIAGNOSTIC_BYTES);
++        byte[] buffer = new byte[8192];
++        int read;
++        while ((read = input.read(buffer)) != -1) {
++            int remaining = MAX_DIAGNOSTIC_BYTES - retained.size();
++            if (remaining > 0) retained.write(buffer, 0, Math.min(read, remaining));
++        }
++        return retained.toString(StandardCharsets.UTF_8);
++    }
++
++    private void terminateProcessTree(Process process) {
++        process.descendants().forEach(handle -> {
++            try { handle.destroyForcibly(); } catch (RuntimeException ignored) { }
++        });
++        process.destroyForcibly();
++        try { process.waitFor(2, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
++    }
++
++    private String summarize(String diagnostics) {
++        if (diagnostics == null || diagnostics.isBlank()) return "compiler returned a non-zero exit status";
++        String oneLine = diagnostics.replaceAll("[\\r\\n\\t]+", " ").replaceAll("\\s{2,}", " ").trim();
++        return oneLine.length() <= 240 ? oneLine : oneLine.substring(0, 240);
++    }
++
++    private void deleteRecursively(Path root) {
++        try (var paths = Files.walk(root)) {
++            paths.sorted(Comparator.reverseOrder()).forEach(path -> {
++                try { Files.deleteIfExists(path); } catch (IOException ignored) { }
++            });
++        } catch (IOException ignored) {
++            // Temporary-directory cleanup is best effort; no path is exposed to clients.
++        }
++    }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/storage/FileAssetRepository.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/storage/FileAssetRepository.java
+index f4f13f3..93795e5 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/storage/FileAssetRepository.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/storage/FileAssetRepository.java
+@@ -1,8 +1,12 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage;
+ 
++import java.time.OffsetDateTime;
++import java.util.List;
+ import java.util.UUID;
+ import org.springframework.data.jpa.repository.JpaRepository;
+ 
+ /** Persistence access for durable file metadata. */
+ public interface FileAssetRepository extends JpaRepository<FileAssetEntity, UUID> {
++    List<FileAssetEntity> findTop100ByStorageKeyStartingWithAndCreatedAtBeforeOrderByCreatedAtAsc(
++            String storageKeyPrefix, OffsetDateTime cutoff);
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/storage/LocalFileStorageAdapter.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/storage/LocalFileStorageAdapter.java
+index 058c561..5491802 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/storage/LocalFileStorageAdapter.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/infrastructure/storage/LocalFileStorageAdapter.java
+@@ -12,7 +12,6 @@ import java.security.DigestInputStream;
+ import java.security.MessageDigest;
+ import java.security.NoSuchAlgorithmException;
+ import java.util.HexFormat;
+-import org.springframework.stereotype.Component;
+ 
+ /**
+  * Local-filesystem implementation of {@link FileStoragePort}.
+@@ -21,7 +20,6 @@ import org.springframework.stereotype.Component;
+  * filesystem supports it. This prevents partially written source files from appearing at their final
+  * storage key.
+  */
+-@Component
+ public class LocalFileStorageAdapter implements FileStoragePort {
+ 
+     private static final int BUFFER_SIZE = 16 * 1024;
+@@ -29,7 +27,14 @@ public class LocalFileStorageAdapter implements FileStoragePort {
+     private final Path root;
+ 
+     public LocalFileStorageAdapter(StorageProperties properties) {
+-        this.root = properties.root().toAbsolutePath().normalize();
++        this(properties.root());
++    }
++
++    public LocalFileStorageAdapter(Path root) {
++        if (root == null) {
++            throw new IllegalArgumentException("storage root must not be null");
++        }
++        this.root = root.toAbsolutePath().normalize();
+         initializeRoot();
+     }
+ 
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/api/AdminStudentController.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/api/AdminStudentController.java
+index 3243924..aac7f80 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/api/AdminStudentController.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/api/AdminStudentController.java
+@@ -6,6 +6,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.Admin
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.AdminStudentSearchCriteria;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminAcademicRecordResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminDeclaredSkillResponse;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminLatestCvResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminProjectResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminStudentDetailResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminStudentListItemResponse;
+@@ -13,7 +14,10 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.application.AdminStud
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.application.RegisteredStudentQueryService;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
++import org.springframework.core.io.ByteArrayResource;
++import org.springframework.http.HttpHeaders;
+ import org.springframework.http.MediaType;
++import org.springframework.http.ResponseEntity;
+ import org.springframework.web.bind.annotation.GetMapping;
+ import org.springframework.web.bind.annotation.PathVariable;
+ import org.springframework.web.bind.annotation.RequestMapping;
+@@ -35,7 +39,6 @@ public class AdminStudentController {
+         this.adminStudentInspectionService = adminStudentInspectionService;
+     }
+ 
+-    /** Search, filter, sort, and paginate the live registered-Student roster. */
+     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+     public PagedResponse<AdminStudentListItemResponse> listRegisteredStudents(
+             @RequestParam(required = false) Integer page,
+@@ -46,13 +49,11 @@ public class AdminStudentController {
+         return registeredStudentQueryService.list(new AdminStudentSearchCriteria(page, size, sort, search, level));
+     }
+ 
+-    /** Returns one registered Student's read-only profile and CV-supporting deep-dive summary. */
+     @GetMapping(value = "/{studentId}", produces = MediaType.APPLICATION_JSON_VALUE)
+     public AdminStudentDetailResponse getStudentDetail(@PathVariable UUID studentId) {
+         return adminStudentInspectionService.getDetail(studentId);
+     }
+ 
+-    /** Returns the selected Student's declared taxonomy skills without verification state. */
+     @GetMapping(value = "/{studentId}/declared-skills", produces = MediaType.APPLICATION_JSON_VALUE)
+     public PagedResponse<AdminDeclaredSkillResponse> getDeclaredSkills(
+             @PathVariable UUID studentId,
+@@ -60,11 +61,9 @@ public class AdminStudentController {
+             @RequestParam(required = false) Integer size,
+             @RequestParam(required = false) String search) {
+         return adminStudentInspectionService.getDeclaredSkills(
+-                studentId,
+-                new AdminStudentCollectionCriteria(page, size, search));
++                studentId, new AdminStudentCollectionCriteria(page, size, search));
+     }
+ 
+-    /** Returns Student-owned portfolio projects and canonical project skills read-only. */
+     @GetMapping(value = "/{studentId}/projects", produces = MediaType.APPLICATION_JSON_VALUE)
+     public PagedResponse<AdminProjectResponse> getProjects(
+             @PathVariable UUID studentId,
+@@ -72,11 +71,9 @@ public class AdminStudentController {
+             @RequestParam(required = false) Integer size,
+             @RequestParam(required = false) String search) {
+         return adminStudentInspectionService.getProjects(
+-                studentId,
+-                new AdminStudentCollectionCriteria(page, size, search));
++                studentId, new AdminStudentCollectionCriteria(page, size, search));
+     }
+ 
+-    /** Returns only committed official academic records for the selected registered Student. */
+     @GetMapping(value = "/{studentId}/academic-records", produces = MediaType.APPLICATION_JSON_VALUE)
+     public PagedResponse<AdminAcademicRecordResponse> getAcademicRecords(
+             @PathVariable UUID studentId,
+@@ -86,7 +83,27 @@ public class AdminStudentController {
+             @RequestParam(required = false) String search,
+             @RequestParam(required = false) String courseCode) {
+         return adminStudentInspectionService.getAcademicRecords(
+-                studentId,
+-                new AdminAcademicRecordCriteria(page, size, sort, search, courseCode));
++                studentId, new AdminAcademicRecordCriteria(page, size, sort, search, courseCode));
++    }
++
++    @GetMapping(value = "/{studentId}/latest-cv", produces = MediaType.APPLICATION_JSON_VALUE)
++    public AdminLatestCvResponse getLatestCv(@PathVariable UUID studentId) {
++        return adminStudentInspectionService.getLatestCv(studentId);
++    }
++
++    @GetMapping(value = "/{studentId}/latest-cv/download", produces = MediaType.APPLICATION_PDF_VALUE)
++    public ResponseEntity<ByteArrayResource> downloadLatestCv(@PathVariable UUID studentId) {
++        var file = adminStudentInspectionService.downloadLatestCv(studentId);
++        return pdfResponse(file.fileName(), file.bytes());
++    }
++
++    private ResponseEntity<ByteArrayResource> pdfResponse(String fileName, byte[] bytes) {
++        return ResponseEntity.ok()
++                .contentType(MediaType.APPLICATION_PDF)
++                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
++                .header(HttpHeaders.CACHE_CONTROL, "no-store")
++                .header("X-Content-Type-Options", "nosniff")
++                .contentLength(bytes.length)
++                .body(new ByteArrayResource(bytes));
+     }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/application/AdminStudentInspectionService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/application/AdminStudentInspectionService.java
+index 98572b7..dcc04f9 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/application/AdminStudentInspectionService.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/application/AdminStudentInspectionService.java
+@@ -25,6 +25,10 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.Adm
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminProjectReadRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminStudentDetailReadRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.RegisteredStudentReadRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileResolver;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.LatestSavedCvQuery;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
+@@ -50,6 +54,9 @@ public class AdminStudentInspectionService {
+     private final AdminAcademicRecordReadRepository academicRecordRepository;
+     private final AdminStudentMapper mapper;
+     private final CurrentActorProvider currentActorProvider;
++    private final LatestSavedCvQuery latestSavedCvQuery;
++    private final ActiveCvFileResolver activeCvFileResolver;
++    private final AuditEventPublisher auditEventPublisher;
+ 
+     public AdminStudentInspectionService(
+             RegisteredStudentReadRepository registeredStudentRepository,
+@@ -58,7 +65,10 @@ public class AdminStudentInspectionService {
+             AdminProjectReadRepository projectRepository,
+             AdminAcademicRecordReadRepository academicRecordRepository,
+             AdminStudentMapper mapper,
+-            CurrentActorProvider currentActorProvider) {
++            CurrentActorProvider currentActorProvider,
++            LatestSavedCvQuery latestSavedCvQuery,
++            ActiveCvFileResolver activeCvFileResolver,
++            AuditEventPublisher auditEventPublisher) {
+         this.registeredStudentRepository = registeredStudentRepository;
+         this.detailRepository = detailRepository;
+         this.declaredSkillRepository = declaredSkillRepository;
+@@ -66,6 +76,9 @@ public class AdminStudentInspectionService {
+         this.academicRecordRepository = academicRecordRepository;
+         this.mapper = mapper;
+         this.currentActorProvider = currentActorProvider;
++        this.latestSavedCvQuery = latestSavedCvQuery;
++        this.activeCvFileResolver = activeCvFileResolver;
++        this.auditEventPublisher = auditEventPublisher;
+     }
+ 
+     /**
+@@ -98,11 +111,7 @@ public class AdminStudentInspectionService {
+                     detailRepository.findAwards(safeStudentId),
+                     detailRepository.findActivities(safeStudentId));
+ 
+-            /*
+-             * BMD-007 persisted CV lifecycle is not present in the current source/database yet.
+-             * Patch 5 replaces this availability value with the persisted latest-CV read repository.
+-             */
+-            AdminLatestCvResponse latestCv = AdminLatestCvResponse.notSaved();
++            AdminLatestCvResponse latestCv = toAdminLatestCv(safeStudentId);
+             return mapper.toDetail(student, profile, supportingData, latestCv);
+         } catch (DataAccessException exception) {
+             LOGGER.error("Admin Student deep-dive could not load persisted Student inspection data.", exception);
+@@ -110,6 +119,45 @@ public class AdminStudentInspectionService {
+         }
+     }
+ 
++    /** Returns latest saved CV availability without creating any review/submission state. */
++    @Transactional(readOnly = true)
++    public AdminLatestCvResponse getLatestCv(UUID studentId) {
++        currentAdmin();
++        UUID safeStudentId = requireRegisteredStudent(studentId);
++        return toAdminLatestCv(safeStudentId);
++    }
++
++    /** Resolves the exact active PDF for an audited Admin download. */
++    @Transactional
++    public ActiveCvFileResolver.ResolvedCvFile downloadLatestCv(UUID studentId) {
++        CurrentActor actor = currentAdmin();
++        UUID safeStudentId = requireRegisteredStudent(studentId);
++        var file = activeCvFileResolver.resolve(safeStudentId);
++        auditEventPublisher.recordRequired(
++                actor.userId(),
++                "ADMIN",
++                "CV_DOWNLOADED_BY_ADMIN",
++                AuditEventCategory.CV_MANAGEMENT,
++                "CV",
++                file.cvId().toString(),
++                Map.of("studentId", safeStudentId.toString(), "revision", file.revision(), "fileSizeBytes", file.fileSizeBytes()));
++        return file;
++    }
++
++    private AdminLatestCvResponse toAdminLatestCv(UUID studentId) {
++        return latestSavedCvQuery.findByStudentId(studentId)
++                .map(cv -> AdminLatestCvResponse.available(
++                        cv.cvId(),
++                        cv.revision(),
++                        cv.generatedAt(),
++                        cv.savedAt(),
++                        lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.model.CvFreshnessStatus.valueOf(cv.freshnessStatus()),
++                        cv.fileName(),
++                        cv.fileSizeBytes(),
++                        studentId))
++                .orElseGet(AdminLatestCvResponse::notSaved);
++    }
++
+     /** Returns a bounded, deterministic page of declared skills for one registered Student. */
+     @Transactional(readOnly = true)
+     public PagedResponse<AdminDeclaredSkillResponse> getDeclaredSkills(
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/CvController.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/CvController.java
+index 89ecf0f..1ee12c5 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/CvController.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/CvController.java
+@@ -6,13 +6,24 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.request.CvSaveRequest;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvFreshnessResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvPreviewResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvResponse;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvDownloadService;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvFreshnessService;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvPreviewService;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvSaveService;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.http.IfMatchSupport;
++import org.springframework.core.io.ByteArrayResource;
+ import org.springframework.http.HttpHeaders;
+ import org.springframework.http.HttpStatus;
+-import org.springframework.web.bind.annotation.*;
++import org.springframework.http.MediaType;
++import org.springframework.http.ResponseEntity;
++import org.springframework.web.bind.annotation.GetMapping;
++import org.springframework.web.bind.annotation.PostMapping;
++import org.springframework.web.bind.annotation.PutMapping;
++import org.springframework.web.bind.annotation.RequestBody;
++import org.springframework.web.bind.annotation.RequestHeader;
++import org.springframework.web.bind.annotation.ResponseStatus;
++import org.springframework.web.bind.annotation.RestController;
+ 
+ @RestController
+ public class CvController {
+@@ -20,11 +31,17 @@ public class CvController {
+     private final CvFreshnessService freshnessService;
+     private final CvPreviewService previewService;
+     private final CvSaveService saveService;
++    private final CvDownloadService downloadService;
+ 
+-    public CvController(CvFreshnessService freshnessService, CvPreviewService previewService, CvSaveService saveService) {
++    public CvController(
++            CvFreshnessService freshnessService,
++            CvPreviewService previewService,
++            CvSaveService saveService,
++            CvDownloadService downloadService) {
+         this.freshnessService = freshnessService;
+         this.previewService = previewService;
+         this.saveService = saveService;
++        this.downloadService = downloadService;
+     }
+ 
+     @GetMapping(ApiPaths.ME_CV + "/source-freshness")
+@@ -39,17 +56,34 @@ public class CvController {
+     }
+ 
+     @GetMapping(ApiPaths.ME_CV)
+-    public CvResponse getCurrent() {
+-        return saveService.getCurrent();
++    public ResponseEntity<CvResponse> getCurrent() {
++        CvResponse response = saveService.getCurrent();
++        return ResponseEntity.ok()
++                .eTag(IfMatchSupport.formatVersion(response.revision()))
++                .body(response);
+     }
+ 
+     @PutMapping(ApiPaths.ME_CV)
+-    public CvResponse save(
+-        @Valid @RequestBody CvSaveRequest request,
+-        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+-        @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
+-        Long revision = ifMatch != null ? lk.ac.ruhuna.dcs.cvmanagement.shared.http.IfMatchSupport.parseVersion(ifMatch) : null;
+-        boolean noneMatchStar = "*".equals(ifNoneMatch);
+-        return saveService.save(request.previewId(), revision, noneMatchStar);
++    public ResponseEntity<CvResponse> save(
++            @Valid @RequestBody CvSaveRequest request,
++            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
++            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
++        Long revision = ifMatch == null ? null : IfMatchSupport.parseVersion(ifMatch);
++        var result = saveService.save(request.previewId(), revision, ifNoneMatch);
++        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
++                .eTag(IfMatchSupport.formatVersion(result.response().revision()))
++                .body(result.response());
++    }
++
++    @GetMapping(value = ApiPaths.ME_CV + "/download", produces = MediaType.APPLICATION_PDF_VALUE)
++    public ResponseEntity<ByteArrayResource> download() {
++        var file = downloadService.downloadCurrent();
++        return ResponseEntity.ok()
++                .contentType(MediaType.APPLICATION_PDF)
++                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.fileName() + "\"")
++                .header(HttpHeaders.CACHE_CONTROL, "no-store")
++                .header("X-Content-Type-Options", "nosniff")
++                .contentLength(file.fileSizeBytes())
++                .body(new ByteArrayResource(file.bytes()));
+     }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/dto/response/CvDownloadResponse.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/dto/response/CvDownloadResponse.java
+deleted file mode 100644
+index b9d1ff1..0000000
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/dto/response/CvDownloadResponse.java
++++ /dev/null
+@@ -1,8 +0,0 @@
+-package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response;
+-
+-/**
+- * Reserved API response DTO boundary for its approved module operations.
+- * <p>Activated only in the sprint that implements the approved behavior.
+- */
+-public class CvDownloadResponse {
+-}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/dto/response/CvVersionResponse.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/dto/response/CvVersionResponse.java
+deleted file mode 100644
+index 50fd44b..0000000
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/api/dto/response/CvVersionResponse.java
++++ /dev/null
+@@ -1,8 +0,0 @@
+-package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response;
+-
+-/**
+- * Reserved API response DTO boundary for its approved module operations.
+- * <p>Activated only in the sprint that implements the approved behavior.
+- */
+-public class CvVersionResponse {
+-}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/ActiveCvFileResolverService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/ActiveCvFileResolverService.java
+new file mode 100644
+index 0000000..e231ae3
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/ActiveCvFileResolverService.java
+@@ -0,0 +1,46 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileAssetRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileResolver;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvFileUnavailableException;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvNotSavedException;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvRepository;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++/** Resolves and integrity-checks the exact durable PDF referenced by the active CV row. */
++@Service
++public class ActiveCvFileResolverService implements ActiveCvFileResolver {
++    private final CvRepository cvRepository;
++    private final FileAssetRepository fileAssetRepository;
++    private final CvFileIntegrityService fileIntegrityService;
++
++    public ActiveCvFileResolverService(
++            CvRepository cvRepository,
++            FileAssetRepository fileAssetRepository,
++            CvFileIntegrityService fileIntegrityService) {
++        this.cvRepository = cvRepository;
++        this.fileAssetRepository = fileAssetRepository;
++        this.fileIntegrityService = fileIntegrityService;
++    }
++
++    @Override
++    @Transactional(readOnly = true)
++    public ResolvedCvFile resolve(UUID studentId) {
++        var cv = cvRepository.findActiveByStudentId(studentId).orElseThrow(CvNotSavedException::new);
++        var asset = fileAssetRepository.findById(cv.getPdfFileAssetId()).orElseThrow(CvFileUnavailableException::new);
++        if (!"application/pdf".equals(asset.getMimeType())
++                || asset.getFileSizeBytes() != cv.getPdfFileSizeBytes()
++                || !asset.getFileName().equals(cv.getPdfFileName())) {
++            throw new CvFileUnavailableException();
++        }
++        try {
++            byte[] bytes = fileIntegrityService.readVerified(
++                    asset.getStorageKey(), asset.getFileSizeBytes(), asset.getChecksumSha256());
++            return new ResolvedCvFile(cv.getId(), cv.getRevision(), asset.getFileName(), asset.getFileSizeBytes(), bytes);
++        } catch (CvFileIntegrityService.FileIntegrityException exception) {
++            throw new CvFileUnavailableException();
++        }
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvActiveSelectionStore.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvActiveSelectionStore.java
+new file mode 100644
+index 0000000..c5cbb0b
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvActiveSelectionStore.java
+@@ -0,0 +1,73 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import java.util.List;
++import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvConfiguration;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.AbstractCvActiveSelectionEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvActiveSelectionId;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSelectedActivityEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSelectedAwardEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSelectedCertificateEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSelectedExperienceEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSelectedProjectEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSelectedActivityRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSelectedAwardRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSelectedCertificateRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSelectedExperienceRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSelectedProjectRepository;
++import org.springframework.stereotype.Component;
++
++/** Owns the normalized record-level selection snapshot attached to the single active CV row. */
++@Component
++public class CvActiveSelectionStore {
++    private final CvSelectedExperienceRepository experiences;
++    private final CvSelectedProjectRepository projects;
++    private final CvSelectedCertificateRepository certificates;
++    private final CvSelectedAwardRepository awards;
++    private final CvSelectedActivityRepository activities;
++
++    public CvActiveSelectionStore(
++            CvSelectedExperienceRepository experiences,
++            CvSelectedProjectRepository projects,
++            CvSelectedCertificateRepository certificates,
++            CvSelectedAwardRepository awards,
++            CvSelectedActivityRepository activities) {
++        this.experiences = experiences;
++        this.projects = projects;
++        this.certificates = certificates;
++        this.awards = awards;
++        this.activities = activities;
++    }
++
++    public void replace(UUID cvId, UUID studentId, CvConfiguration configuration) {
++        experiences.deleteAllByIdCvId(cvId); experiences.flush();
++        projects.deleteAllByIdCvId(cvId); projects.flush();
++        certificates.deleteAllByIdCvId(cvId); certificates.flush();
++        awards.deleteAllByIdCvId(cvId); awards.flush();
++        activities.deleteAllByIdCvId(cvId); activities.flush();
++
++        experiences.saveAll(configuration.includedExperienceIds().stream()
++                .map(id -> new CvSelectedExperienceEntity(cvId, studentId, id)).toList());
++        projects.saveAll(configuration.includedProjectIds().stream()
++                .map(id -> new CvSelectedProjectEntity(cvId, studentId, id)).toList());
++        certificates.saveAll(configuration.includedCertificateIds().stream()
++                .map(id -> new CvSelectedCertificateEntity(cvId, studentId, id)).toList());
++        awards.saveAll(configuration.includedAwardIds().stream()
++                .map(id -> new CvSelectedAwardEntity(cvId, studentId, id)).toList());
++        activities.saveAll(configuration.includedActivityIds().stream()
++                .map(id -> new CvSelectedActivityEntity(cvId, studentId, id)).toList());
++    }
++
++    public CvConfiguration load(UUID cvId) {
++        return new CvConfiguration(
++                sourceIds(experiences.findAllByIdCvIdOrderByIdSourceRecordIdAsc(cvId)),
++                sourceIds(projects.findAllByIdCvIdOrderByIdSourceRecordIdAsc(cvId)),
++                sourceIds(certificates.findAllByIdCvIdOrderByIdSourceRecordIdAsc(cvId)),
++                sourceIds(awards.findAllByIdCvIdOrderByIdSourceRecordIdAsc(cvId)),
++                sourceIds(activities.findAllByIdCvIdOrderByIdSourceRecordIdAsc(cvId)));
++    }
++
++    private List<UUID> sourceIds(List<? extends AbstractCvActiveSelectionEntity> rows) {
++        return rows.stream().map(AbstractCvActiveSelectionEntity::getId).map(CvActiveSelectionId::getSourceRecordId).toList();
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvDownloadService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvDownloadService.java
+index 97bec78..ba6bb27 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvDownloadService.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvDownloadService.java
+@@ -1,8 +1,43 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
+ 
+-/**
+- * Reserved application service boundary for its approved module operations.
+- * <p>Activated only in the sprint that implements the approved behavior.
+- */
++import java.util.Map;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileResolver;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
++import org.springframework.stereotype.Service;
++
++/** Owner-scoped Student download application service. */
++@Service
+ public class CvDownloadService {
++    private final CurrentActorProvider currentActorProvider;
++    private final StudentRepository studentRepository;
++    private final ActiveCvFileResolver fileResolver;
++    private final AuditEventPublisher auditEventPublisher;
++
++    public CvDownloadService(
++            CurrentActorProvider currentActorProvider,
++            StudentRepository studentRepository,
++            ActiveCvFileResolver fileResolver,
++            AuditEventPublisher auditEventPublisher) {
++        this.currentActorProvider = currentActorProvider;
++        this.studentRepository = studentRepository;
++        this.fileResolver = fileResolver;
++        this.auditEventPublisher = auditEventPublisher;
++    }
++
++    public ActiveCvFileResolver.ResolvedCvFile downloadCurrent() {
++        var actor = currentActorProvider.currentActor()
++                .orElseThrow(() -> new ForbiddenException("No authenticated Student context."));
++        var student = studentRepository.findByUserAccountId(actor.userId())
++                .orElseThrow(() -> new NotFoundException("Student record not found for the authenticated account."));
++        var file = fileResolver.resolve(student.getId());
++        auditEventPublisher.recordRequired(
++                actor.userId(), "STUDENT", "CV_DOWNLOADED_BY_STUDENT", AuditEventCategory.CV_MANAGEMENT,
++                "CV", file.cvId().toString(), Map.of("revision", file.revision(), "fileSizeBytes", file.fileSizeBytes()));
++        return file;
++    }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvFileIntegrityService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvFileIntegrityService.java
+new file mode 100644
+index 0000000..021535b
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvFileIntegrityService.java
+@@ -0,0 +1,67 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import java.io.ByteArrayOutputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.security.MessageDigest;
++import java.security.NoSuchAlgorithmException;
++import java.util.HexFormat;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex.LatexProperties;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStorageException;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
++import org.springframework.beans.factory.annotation.Qualifier;
++import org.springframework.stereotype.Service;
++
++/** Reads a stored generated PDF with bounded size and verifies its persisted SHA-256 metadata. */
++@Service
++public class CvFileIntegrityService {
++    private final FileStoragePort cvFileStorage;
++    private final long maxBytes;
++
++    public CvFileIntegrityService(
++            @Qualifier("cvFileStorage") FileStoragePort cvFileStorage,
++            LatexProperties properties) {
++        this.cvFileStorage = cvFileStorage;
++        this.maxBytes = properties.maxOutputBytes();
++    }
++
++    public byte[] readVerified(String storageKey, long expectedSize, String expectedSha256) {
++        if (storageKey == null || storageKey.isBlank() || expectedSize < 1 || expectedSize > maxBytes
++                || expectedSha256 == null || !expectedSha256.matches("^[0-9a-f]{64}$")) {
++            throw new FileIntegrityException();
++        }
++        try (InputStream input = cvFileStorage.open(storageKey)) {
++            MessageDigest digest = MessageDigest.getInstance("SHA-256");
++            ByteArrayOutputStream output = new ByteArrayOutputStream((int) Math.min(expectedSize, 64 * 1024));
++            byte[] buffer = new byte[16 * 1024];
++            long total = 0;
++            int read;
++            while ((read = input.read(buffer)) != -1) {
++                total += read;
++                if (total > maxBytes || total > expectedSize) throw new FileIntegrityException();
++                digest.update(buffer, 0, read);
++                output.write(buffer, 0, read);
++            }
++            String actualSha256 = HexFormat.of().formatHex(digest.digest());
++            if (total != expectedSize || !MessageDigest.isEqual(
++                    actualSha256.getBytes(java.nio.charset.StandardCharsets.US_ASCII),
++                    expectedSha256.getBytes(java.nio.charset.StandardCharsets.US_ASCII))) {
++                throw new FileIntegrityException();
++            }
++            byte[] bytes = output.toByteArray();
++            if (bytes.length < 5 || bytes[0] != '%' || bytes[1] != 'P' || bytes[2] != 'D' || bytes[3] != 'F' || bytes[4] != '-') {
++                throw new FileIntegrityException();
++            }
++            return bytes;
++        } catch (FileIntegrityException exception) {
++            throw exception;
++        } catch (IOException | FileStorageException | NoSuchAlgorithmException exception) {
++            throw new FileIntegrityException();
++        }
++    }
++
++    /** Internal marker; callers map it to the endpoint-specific safe public error. */
++    public static final class FileIntegrityException extends RuntimeException {
++        private FileIntegrityException() { super("Generated PDF integrity verification failed."); }
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvFreshnessService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvFreshnessService.java
+index 40b1737..d3abdfe 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvFreshnessService.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvFreshnessService.java
+@@ -52,7 +52,7 @@ public class CvFreshnessService {
+     public CvFreshnessResponse getFreshness() {
+         UUID studentId = currentStudentId();
+         OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+-        var savedCv = cvRepository.findByStudentId(studentId);
++        var savedCv = cvRepository.findActiveByStudentId(studentId);
+ 
+         if (savedCv.isEmpty()) {
+             return new CvFreshnessResponse(
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvGenerationService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvGenerationService.java
+index 1355fe0..22a959d 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvGenerationService.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvGenerationService.java
+@@ -1,8 +1,33 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
+ 
+-/**
+- * Reserved application service boundary for its approved module operations.
+- * <p>Activated only in the sprint that implements the approved behavior.
+- */
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex.LatexCompilationException;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex.LatexCvRenderer;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex.PdfGenerationService;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvGenerationFailedException;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvDocumentModel;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.stereotype.Service;
++
++/** Generates the exact backend-controlled PDF candidate associated with a CV preview. */
++@Service
+ public class CvGenerationService {
++
++    private static final Logger LOGGER = LoggerFactory.getLogger(CvGenerationService.class);
++    private final LatexCvRenderer latexRenderer;
++    private final PdfGenerationService pdfGenerationService;
++
++    public CvGenerationService(LatexCvRenderer latexRenderer, PdfGenerationService pdfGenerationService) {
++        this.latexRenderer = latexRenderer;
++        this.pdfGenerationService = pdfGenerationService;
++    }
++
++    public byte[] generatePdf(CvDocumentModel document) {
++        try {
++            return pdfGenerationService.compile(latexRenderer.render(document));
++        } catch (LatexCompilationException exception) {
++            LOGGER.warn("CV PDF generation failed.");
++            throw new CvGenerationFailedException();
++        }
++    }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvLatestSavedCvQueryService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvLatestSavedCvQueryService.java
+new file mode 100644
+index 0000000..a4c16fd
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvLatestSavedCvQueryService.java
+@@ -0,0 +1,72 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import java.time.OffsetDateTime;
++import java.util.Collection;
++import java.util.HashMap;
++import java.util.LinkedHashMap;
++import java.util.Map;
++import java.util.Optional;
++import java.util.Set;
++import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.LatestSavedCvQuery;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSourceFreshnessEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSourceFreshnessRepository;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++/** Indexed, read-only latest-CV projection used by Admin and future export consumers. */
++@Service
++@Transactional(readOnly = true)
++public class CvLatestSavedCvQueryService implements LatestSavedCvQuery {
++    private static final int MAX_BATCH_SIZE = 500;
++    private final CvRepository cvRepository;
++    private final CvSourceFreshnessRepository freshnessRepository;
++
++    public CvLatestSavedCvQueryService(CvRepository cvRepository, CvSourceFreshnessRepository freshnessRepository) {
++        this.cvRepository = cvRepository;
++        this.freshnessRepository = freshnessRepository;
++    }
++
++    @Override
++    public Optional<LatestSavedCv> findByStudentId(UUID studentId) {
++        if (studentId == null) return Optional.empty();
++        return cvRepository.findActiveByStudentId(studentId)
++                .map(cv -> toRecord(cv, freshnessRepository.findById(studentId).orElse(null)));
++    }
++
++    @Override
++    public Map<UUID, LatestSavedCv> findByStudentIds(Set<UUID> studentIds) {
++        if (studentIds == null || studentIds.isEmpty()) return Map.of();
++        if (studentIds.size() > MAX_BATCH_SIZE || studentIds.stream().anyMatch(java.util.Objects::isNull)) {
++            throw new IllegalArgumentException("studentIds must contain between 1 and 500 non-null values");
++        }
++        Collection<CvEntity> cvs = cvRepository.findAllActiveByStudentIdIn(studentIds);
++        Map<UUID, CvSourceFreshnessEntity> freshnessByStudent = new HashMap<>();
++        freshnessRepository.findAllById(studentIds).forEach(row -> freshnessByStudent.put(row.getStudentId(), row));
++        Map<UUID, LatestSavedCv> result = new LinkedHashMap<>();
++        cvs.stream().sorted(java.util.Comparator.comparing(cv -> cv.getStudentId().toString()))
++                .forEach(cv -> result.put(cv.getStudentId(), toRecord(cv, freshnessByStudent.get(cv.getStudentId()))));
++        return Map.copyOf(result);
++    }
++
++    private LatestSavedCv toRecord(CvEntity cv, CvSourceFreshnessEntity freshness) {
++        return new LatestSavedCv(
++                cv.getStudentId(), cv.getId(), cv.getRevision(), cv.getGeneratedAt(), cv.getSavedAt(),
++                status(freshness, cv.getSavedAt()), cv.getPdfFileName(), cv.getPdfFileSizeBytes());
++    }
++
++    private String status(CvSourceFreshnessEntity row, OffsetDateTime savedAt) {
++        if (row == null) return "CURRENT";
++        return isAfter(row.getProfileChangedAt(), savedAt)
++                || isAfter(row.getDeclaredSkillsChangedAt(), savedAt)
++                || isAfter(row.getProjectsChangedAt(), savedAt)
++                || isAfter(row.getAcademicRecordsChangedAt(), savedAt)
++                ? "OUTDATED" : "CURRENT";
++    }
++
++    private boolean isAfter(OffsetDateTime changedAt, OffsetDateTime savedAt) {
++        return changedAt != null && changedAt.isAfter(savedAt);
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvOrphanFileCleanupService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvOrphanFileCleanupService.java
+new file mode 100644
+index 0000000..4c1c40d
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvOrphanFileCleanupService.java
+@@ -0,0 +1,72 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import java.time.Clock;
++import java.time.Duration;
++import java.time.OffsetDateTime;
++import java.time.ZoneOffset;
++import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileAssetRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvRepository;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Qualifier;
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.scheduling.annotation.Scheduled;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++/** Best-effort post-commit reclamation of superseded CV file assets. */
++@Service
++public class CvOrphanFileCleanupService {
++    private static final Logger LOGGER = LoggerFactory.getLogger(CvOrphanFileCleanupService.class);
++    private final CvRepository cvRepository;
++    private final FileAssetRepository fileAssetRepository;
++    private final FileStoragePort cvFileStorage;
++    private final Clock clock;
++    private final Duration orphanGracePeriod;
++
++    public CvOrphanFileCleanupService(
++            CvRepository cvRepository,
++            FileAssetRepository fileAssetRepository,
++            @Qualifier("cvFileStorage") FileStoragePort cvFileStorage,
++            Clock clock,
++            @Value("${app.cv.cleanup.orphan-grace-period:PT1H}") Duration orphanGracePeriod) {
++        this.cvRepository = cvRepository;
++        this.fileAssetRepository = fileAssetRepository;
++        this.cvFileStorage = cvFileStorage;
++        this.clock = clock;
++        if (orphanGracePeriod.isNegative() || orphanGracePeriod.isZero()) {
++            throw new IllegalArgumentException("CV orphan-file grace period must be positive");
++        }
++        this.orphanGracePeriod = orphanGracePeriod;
++    }
++
++    @Scheduled(fixedDelayString = "${app.cv.cleanup.poll-delay-ms:60000}")
++    @Transactional
++    public void retryOrphanCleanup() {
++        OffsetDateTime cutoff = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC).minus(orphanGracePeriod);
++        for (var asset : fileAssetRepository
++                .findTop100ByStorageKeyStartingWithAndCreatedAtBeforeOrderByCreatedAtAsc("cv/objects/", cutoff)) {
++            if (!cvRepository.existsByPdfFileAssetId(asset.getId())) {
++                deleteAsset(asset.getId(), asset.getStorageKey());
++            }
++        }
++    }
++
++    @Transactional
++    public void deleteIfUnreferenced(UUID fileAssetId) {
++        if (fileAssetId == null || cvRepository.existsByPdfFileAssetId(fileAssetId)) return;
++        fileAssetRepository.findById(fileAssetId)
++                .ifPresent(asset -> deleteAsset(asset.getId(), asset.getStorageKey()));
++    }
++
++    private void deleteAsset(UUID fileAssetId, String storageKey) {
++        try {
++            cvFileStorage.delete(storageKey);
++            fileAssetRepository.deleteById(fileAssetId);
++        } catch (RuntimeException exception) {
++            LOGGER.warn("Superseded CV file cleanup failed for file asset {}.", fileAssetId);
++        }
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewCleanupService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewCleanupService.java
+new file mode 100644
+index 0000000..d6e71f4
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewCleanupService.java
+@@ -0,0 +1,65 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import java.time.Clock;
++import java.time.Duration;
++import java.time.OffsetDateTime;
++import java.time.ZoneOffset;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvPreviewRepository;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Qualifier;
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.scheduling.annotation.Scheduled;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++/** Reclaims expired unconsumed preview PDFs without ever touching consumed/active CV files. */
++@Service
++public class CvPreviewCleanupService {
++
++    private static final Logger LOGGER = LoggerFactory.getLogger(CvPreviewCleanupService.class);
++    private final CvPreviewRepository previewRepository;
++    private final FileStoragePort cvFileStorage;
++    private final Clock clock;
++    private final Duration consumedPreviewRetention;
++
++    public CvPreviewCleanupService(
++            CvPreviewRepository previewRepository,
++            @Qualifier("cvFileStorage") FileStoragePort cvFileStorage,
++            Clock clock,
++            @Value("${app.cv.consumed-preview-retention:PT24H}") Duration consumedPreviewRetention) {
++        this.previewRepository = previewRepository;
++        this.cvFileStorage = cvFileStorage;
++        this.clock = clock;
++        if (consumedPreviewRetention.isNegative() || consumedPreviewRetention.isZero()) {
++            throw new IllegalArgumentException("CV consumed-preview retention must be positive");
++        }
++        this.consumedPreviewRetention = consumedPreviewRetention;
++    }
++
++    @Scheduled(fixedDelayString = "${app.cv.cleanup.poll-delay-ms:60000}")
++    @Transactional
++    public void deleteExpiredUnconsumedPreviews() {
++        OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
++        for (var preview : previewRepository.findTop100ByConsumedAtIsNullAndExpiresAtBeforeOrderByExpiresAtAsc(now)) {
++            try {
++                if (preview.getStagedStorageKey() != null) cvFileStorage.delete(preview.getStagedStorageKey());
++                previewRepository.deleteById(preview.getPreviewId());
++            } catch (RuntimeException exception) {
++                LOGGER.warn("Expired CV preview cleanup failed for preview {}.", preview.getPreviewId());
++            }
++        }
++
++        OffsetDateTime consumedCutoff = now.minus(consumedPreviewRetention);
++        for (var preview : previewRepository.findTop100ByConsumedAtIsNotNullAndConsumedAtBeforeOrderByConsumedAtAsc(consumedCutoff)) {
++            try {
++                // A consumed preview may reference the active PDF storage key. The active CV/file-asset
++                // lifecycle owns that object, so only preview metadata is removed here.
++                previewRepository.deleteById(preview.getPreviewId());
++            } catch (RuntimeException exception) {
++                LOGGER.warn("Consumed CV preview metadata cleanup failed for preview {}.", preview.getPreviewId());
++            }
++        }
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewPersistenceService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewPersistenceService.java
+new file mode 100644
+index 0000000..e1c321c
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewPersistenceService.java
+@@ -0,0 +1,25 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvConfiguration;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvPreviewEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvPreviewRepository;
++import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
++
++/** Commits preview metadata and its immutable record-selection snapshot in one database transaction. */
++@Service
++public class CvPreviewPersistenceService {
++    private final CvPreviewRepository previewRepository;
++    private final CvPreviewSelectionStore selectionStore;
++
++    public CvPreviewPersistenceService(CvPreviewRepository previewRepository, CvPreviewSelectionStore selectionStore) {
++        this.previewRepository = previewRepository;
++        this.selectionStore = selectionStore;
++    }
++
++    @Transactional
++    public void persist(CvPreviewEntity preview, CvConfiguration configuration) {
++        previewRepository.save(preview);
++        selectionStore.save(preview.getPreviewId(), preview.getStudentId(), configuration);
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewService.java
+index 9db109a..d09cdd6 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewService.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvPreviewService.java
+@@ -1,24 +1,28 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
+ 
++import java.io.ByteArrayInputStream;
+ import java.time.Clock;
+ import java.time.Duration;
+ import java.time.OffsetDateTime;
++import java.time.ZoneOffset;
+ import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStorageException;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.request.CvPreviewRequest;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvPreviewResponse;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvGenerationFailedException;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvConfiguration;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvPreviewEntity;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvPreviewRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
++import org.springframework.beans.factory.annotation.Qualifier;
+ import org.springframework.beans.factory.annotation.Value;
+ import org.springframework.stereotype.Service;
+-import org.springframework.transaction.annotation.Transactional;
+ 
+-/** Creates a durable, owner-scoped preview snapshot from authoritative Student source data. */
++/** Creates an owner-scoped preview and stages the exact PDF candidate that a later Save promotes. */
+ @Service
+ public class CvPreviewService {
+ 
+@@ -27,8 +31,9 @@ public class CvPreviewService {
+     private final CvSourceQueryService sourceQueryService;
+     private final CvSourceFingerprintService fingerprintService;
+     private final CvHtmlRenderer htmlRenderer;
+-    private final CvPreviewRepository previewRepository;
+-    private final CvPreviewSelectionStore selectionStore;
++    private final CvGenerationService generationService;
++    private final FileStoragePort cvFileStorage;
++    private final CvPreviewPersistenceService persistenceService;
+     private final CvFreshnessService freshnessService;
+     private final Clock clock;
+     private final Duration previewTtl;
+@@ -39,8 +44,9 @@ public class CvPreviewService {
+             CvSourceQueryService sourceQueryService,
+             CvSourceFingerprintService fingerprintService,
+             CvHtmlRenderer htmlRenderer,
+-            CvPreviewRepository previewRepository,
+-            CvPreviewSelectionStore selectionStore,
++            CvGenerationService generationService,
++            @Qualifier("cvFileStorage") FileStoragePort cvFileStorage,
++            CvPreviewPersistenceService persistenceService,
+             CvFreshnessService freshnessService,
+             Clock clock,
+             @Value("${app.cv.preview-ttl:PT15M}") Duration previewTtl) {
+@@ -49,34 +55,61 @@ public class CvPreviewService {
+         this.sourceQueryService = sourceQueryService;
+         this.fingerprintService = fingerprintService;
+         this.htmlRenderer = htmlRenderer;
+-        this.previewRepository = previewRepository;
+-        this.selectionStore = selectionStore;
++        this.generationService = generationService;
++        this.cvFileStorage = cvFileStorage;
++        this.persistenceService = persistenceService;
+         this.freshnessService = freshnessService;
+         this.clock = clock;
+         this.previewTtl = previewTtl;
+     }
+ 
+-    @Transactional
++    /**
++     * External PDF compilation and filesystem I/O intentionally occur outside a database transaction.
++     * Only the final preview metadata + selection snapshot is committed atomically.
++     */
+     public CvPreviewResponse createPreview(CvPreviewRequest request) {
+         StudentEntity student = currentStudent();
+         CvConfiguration configuration = CvConfiguration.from(request);
+         var document = sourceQueryService.load(student, configuration);
+         String sourceFingerprint = fingerprintService.fingerprint(document);
+         String htmlPreview = htmlRenderer.render(document);
++        byte[] pdf = generationService.generatePdf(document);
+ 
+-        OffsetDateTime generatedAt = OffsetDateTime.now(clock);
++        OffsetDateTime generatedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+         OffsetDateTime expiresAt = generatedAt.plus(previewTtl);
+         UUID previewId = UUID.randomUUID();
++        String fileName = "cv-" + student.getId() + ".pdf";
++        String storageKey = storageKey(previewId, generatedAt);
++
++        FileStoragePort.StoredFile stored;
++        try {
++            stored = cvFileStorage.store(storageKey, new ByteArrayInputStream(pdf));
++        } catch (FileStorageException exception) {
++            throw new CvGenerationFailedException();
++        }
++        if (stored.sizeBytes() != pdf.length || stored.sizeBytes() < 1) {
++            deleteQuietly(storageKey);
++            throw new CvGenerationFailedException();
++        }
+ 
+         CvPreviewEntity preview = new CvPreviewEntity();
+         preview.setPreviewId(previewId);
+         preview.setStudentId(student.getId());
+         preview.setSourceFingerprint(sourceFingerprint);
++        preview.setStagedStorageKey(storageKey);
++        preview.setStagedFileName(fileName);
++        preview.setStagedFileSizeBytes(stored.sizeBytes());
++        preview.setStagedChecksumSha256(stored.checksumSha256());
+         preview.setGeneratedAt(generatedAt);
+         preview.setExpiresAt(expiresAt);
+         preview.setCreatedAt(generatedAt);
+-        previewRepository.save(preview);
+-        selectionStore.save(previewId, student.getId(), configuration);
++
++        try {
++            persistenceService.persist(preview, configuration);
++        } catch (RuntimeException exception) {
++            deleteQuietly(storageKey);
++            throw exception;
++        }
+ 
+         return new CvPreviewResponse(
+                 previewId,
+@@ -87,6 +120,19 @@ public class CvPreviewService {
+                 expiresAt);
+     }
+ 
++    private String storageKey(UUID previewId, OffsetDateTime generatedAt) {
++        return "cv/objects/%04d/%02d/%s.pdf".formatted(
++                generatedAt.getYear(), generatedAt.getMonthValue(), previewId);
++    }
++
++    private void deleteQuietly(String storageKey) {
++        try {
++            cvFileStorage.delete(storageKey);
++        } catch (RuntimeException ignored) {
++            // Cleanup is best effort here; the object is opaque and can be reclaimed operationally.
++        }
++    }
++
+     private StudentEntity currentStudent() {
+         var actor = currentActorProvider.currentActor()
+                 .orElseThrow(() -> new ForbiddenException("No authenticated Student context."));
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSaveResult.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSaveResult.java
+new file mode 100644
+index 0000000..8e9f4a5
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSaveResult.java
+@@ -0,0 +1,6 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvResponse;
++
++/** HTTP-neutral result carrying whether the active resource was created or replaced. */
++public record CvSaveResult(CvResponse response, boolean created) {}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSaveService.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSaveService.java
+index 5336d3d..60f5367 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSaveService.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSaveService.java
+@@ -2,46 +2,58 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
+ 
+ import java.time.Clock;
+ import java.time.OffsetDateTime;
+-import java.util.Arrays;
+-import java.util.List;
++import java.time.ZoneOffset;
++import java.util.Map;
++import java.util.Objects;
++import java.util.Optional;
+ import java.util.UUID;
+-import java.util.stream.Collectors;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvPreviewConfigurationResponse;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileAssetEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileAssetRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.GeneratedFileMetadataResponse;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvConfigurationInvalidException;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvNotSavedException;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvPreconditionRequiredException;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvPreviewExpiredException;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.StaleCvException;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvConfiguration;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.policy.CvConditionalRequestPolicy;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvEntity;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvPreviewEntity;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvPreviewRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSourceFreshnessRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
++import org.springframework.transaction.support.TransactionSynchronization;
++import org.springframework.transaction.support.TransactionSynchronizationManager;
+ 
+-/**
+- * Interim active-CV persistence over the durable preview model.
+- *
+- * <p>Batch 1 removes the JVM preview cache and makes preview consumption/idempotency durable. Real
+- * staged PDF promotion, source-fingerprint revalidation, normalized active-selection writes, locking,
+- * and final conditional HTTP semantics are completed by Patches 4-5 as defined by the implementation plan.</p>
+- */
++/** Owns the Student's single active saved CV and its optimistic-concurrency revision. */
+ @Service
+ public class CvSaveService {
+ 
++    private static final String PDF_MEDIA_TYPE = "application/pdf";
+     private final CurrentActorProvider currentActorProvider;
+     private final StudentRepository studentRepository;
+     private final CvRepository cvRepository;
+     private final CvPreviewRepository previewRepository;
++    private final CvSourceFreshnessRepository freshnessRepository;
+     private final CvPreviewSelectionStore previewSelectionStore;
++    private final CvActiveSelectionStore activeSelectionStore;
++    private final CvSourceQueryService sourceQueryService;
++    private final CvSourceFingerprintService fingerprintService;
++    private final CvConditionalRequestPolicy conditionalRequestPolicy;
++    private final CvFileIntegrityService fileIntegrityService;
++    private final FileAssetRepository fileAssetRepository;
+     private final CvFreshnessService freshnessService;
++    private final CvOrphanFileCleanupService orphanFileCleanupService;
++    private final AuditEventPublisher auditEventPublisher;
+     private final Clock clock;
+ 
+     public CvSaveService(
+@@ -49,138 +61,209 @@ public class CvSaveService {
+             StudentRepository studentRepository,
+             CvRepository cvRepository,
+             CvPreviewRepository previewRepository,
++            CvSourceFreshnessRepository freshnessRepository,
+             CvPreviewSelectionStore previewSelectionStore,
++            CvActiveSelectionStore activeSelectionStore,
++            CvSourceQueryService sourceQueryService,
++            CvSourceFingerprintService fingerprintService,
++            CvConditionalRequestPolicy conditionalRequestPolicy,
++            CvFileIntegrityService fileIntegrityService,
++            FileAssetRepository fileAssetRepository,
+             CvFreshnessService freshnessService,
++            CvOrphanFileCleanupService orphanFileCleanupService,
++            AuditEventPublisher auditEventPublisher,
+             Clock clock) {
+         this.currentActorProvider = currentActorProvider;
+         this.studentRepository = studentRepository;
+         this.cvRepository = cvRepository;
+         this.previewRepository = previewRepository;
++        this.freshnessRepository = freshnessRepository;
+         this.previewSelectionStore = previewSelectionStore;
++        this.activeSelectionStore = activeSelectionStore;
++        this.sourceQueryService = sourceQueryService;
++        this.fingerprintService = fingerprintService;
++        this.conditionalRequestPolicy = conditionalRequestPolicy;
++        this.fileIntegrityService = fileIntegrityService;
++        this.fileAssetRepository = fileAssetRepository;
+         this.freshnessService = freshnessService;
++        this.orphanFileCleanupService = orphanFileCleanupService;
++        this.auditEventPublisher = auditEventPublisher;
+         this.clock = clock;
+     }
+ 
+     @Transactional(readOnly = true)
+     public CvResponse getCurrent() {
+         UUID studentId = currentStudentId();
+-        CvEntity cv = cvRepository.findByStudentId(studentId)
+-                .orElseThrow(CvNotSavedException::new);
+-        return toResponse(cv);
++        CvEntity cv = cvRepository.findActiveByStudentId(studentId).orElseThrow(CvNotSavedException::new);
++        return toResponse(cv, activeSelectionStore.load(cv.getId()));
+     }
+ 
++    /**
++     * Promotes one exact staged preview. PDF compilation never occurs in this transaction.
++     * Student, freshness, preview, and active-CV state are serialized before any revision is changed.
++     */
+     @Transactional
+-    public CvResponse save(UUID previewId, Long ifMatchRevision, boolean ifNoneMatchStar) {
+-        UUID studentId = currentStudentId();
+-        OffsetDateTime now = OffsetDateTime.now(clock);
++    public CvSaveResult save(UUID previewId, Long ifMatchRevision, String ifNoneMatch) {
++        Objects.requireNonNull(previewId, "previewId");
++        CurrentActor actor = currentActor();
++        StudentEntity student = studentRepository.findByUserAccountIdForUpdate(actor.userId())
++                .orElseThrow(() -> new NotFoundException("Student record not found for the authenticated account."));
++        UUID studentId = student.getId();
++        OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
++
++        freshnessRepository.ensureRow(studentId);
++        freshnessRepository.findForUpdate(studentId)
++                .orElseThrow(() -> new IllegalStateException("CV source freshness row could not be locked."));
+ 
+-        CvPreviewEntity preview = previewRepository.findByPreviewIdAndStudentId(previewId, studentId)
++        CvPreviewEntity preview = previewRepository.findOwnedForUpdate(previewId, studentId)
+                 .orElseThrow(CvPreviewExpiredException::new);
+-        var existing = cvRepository.findByStudentId(studentId);
++        Optional<CvEntity> persistedRow = cvRepository.findByStudentIdForUpdate(studentId);
++        Optional<CvEntity> active = persistedRow.filter(this::isValidActiveCv);
+ 
+         if (preview.getConsumedAt() != null) {
+-            if (existing.isPresent()
+-                    && existing.get().getId().equals(preview.getResultCvId())
+-                    && existing.get().getRevision() == preview.getResultRevision()) {
+-                return toResponse(existing.get());
++            if (active.isPresent()
++                    && active.get().getId().equals(preview.getResultCvId())
++                    && active.get().getRevision() == preview.getResultRevision()) {
++                CvResponse response = toResponse(active.get(), activeSelectionStore.load(active.get().getId()));
++                return new CvSaveResult(response, preview.getResultRevision() == 1);
+             }
+             throw new CvPreviewExpiredException();
+         }
+-        if (!preview.getExpiresAt().isAfter(now)) {
++        if (!preview.getExpiresAt().isAfter(now)) throw new CvPreviewExpiredException();
++
++        conditionalRequestPolicy.validate(
++                active.isPresent(), active.map(CvEntity::getRevision).orElse(0), ifMatchRevision, ifNoneMatch);
++        validateStagedArtifact(preview);
++        try {
++            fileIntegrityService.readVerified(
++                    preview.getStagedStorageKey(), preview.getStagedFileSizeBytes(), preview.getStagedChecksumSha256());
++        } catch (CvFileIntegrityService.FileIntegrityException exception) {
+             throw new CvPreviewExpiredException();
+         }
+ 
+-        if (existing.isEmpty()) {
+-            if (!ifNoneMatchStar) {
+-                throw new CvPreconditionRequiredException();
+-            }
+-        } else {
+-            if (ifNoneMatchStar) {
+-                throw new StaleCvException();
+-            }
+-            if (ifMatchRevision == null) {
+-                throw new CvPreconditionRequiredException();
+-            }
+-            if (existing.get().getRevision() != ifMatchRevision) {
+-                throw new StaleCvException();
+-            }
++        CvConfiguration configuration = previewSelectionStore.load(previewId);
++        try {
++            var currentDocument = sourceQueryService.load(student, configuration);
++            String currentFingerprint = fingerprintService.fingerprint(currentDocument);
++            if (!preview.getSourceFingerprint().equals(currentFingerprint)) throw new CvPreviewExpiredException();
++        } catch (CvConfigurationInvalidException exception) {
++            throw new CvPreviewExpiredException();
+         }
+ 
+-        CvConfiguration configuration = previewSelectionStore.load(previewId);
+-        CvEntity cv = existing.orElseGet(() -> {
+-            CvEntity fresh = new CvEntity();
+-            fresh.setId(UUID.randomUUID());
+-            fresh.setStudentId(studentId);
+-            fresh.setRevision(0);
+-            fresh.setCreatedAt(now);
+-            return fresh;
+-        });
++        FileAssetEntity newAsset = new FileAssetEntity();
++        newAsset.setOwnerAccountId(actor.userId());
++        newAsset.setFileName(preview.getStagedFileName());
++        newAsset.setStorageKey(preview.getStagedStorageKey());
++        newAsset.setMimeType(PDF_MEDIA_TYPE);
++        newAsset.setFileSizeBytes(preview.getStagedFileSizeBytes());
++        newAsset.setChecksumSha256(preview.getStagedChecksumSha256());
++        newAsset = fileAssetRepository.save(newAsset);
++        fileAssetRepository.flush();
+ 
+-        cv.setRevision(cv.getRevision() + 1);
++        UUID oldAssetId = active.map(CvEntity::getPdfFileAssetId).orElse(null);
++        CvEntity cv = persistedRow.orElseGet(() -> newCv(studentId, now));
++        int nextRevision = active.map(CvEntity::getRevision).orElse(0) + 1;
++        if (active.isEmpty() && persistedRow.isPresent()) {
++            // Upgrade any pre-Batch-2 zero-byte placeholder as the first real active CV.
++            cv.setRevision(0);
++        }
++        cv.setRevision(nextRevision);
+         cv.setGeneratedAt(preview.getGeneratedAt());
+         cv.setSavedAt(now);
+         cv.setUpdatedAt(now);
+         cv.setSourceFingerprint(preview.getSourceFingerprint());
+         cv.setLastSavedPreviewId(previewId);
+-        cv.setIncludedExperienceIds(join(configuration.includedExperienceIds()));
+-        cv.setIncludedProjectIds(join(configuration.includedProjectIds()));
+-        cv.setIncludedCertificateIds(join(configuration.includedCertificateIds()));
+-        cv.setIncludedAwardIds(join(configuration.includedAwardIds()));
+-        cv.setIncludedActivityIds(join(configuration.includedActivityIds()));
++        cv.setPdfFileAssetId(newAsset.getId());
++        cv.setPdfFileName(preview.getStagedFileName());
++        cv.setPdfFileSizeBytes(preview.getStagedFileSizeBytes());
++        clearLegacySelectionColumns(cv);
+ 
+-        // Transitional metadata only. Patch 4 replaces this with the staged, non-zero PDF artifact.
+-        cv.setPdfFileName("cv-" + studentId + "-r" + cv.getRevision() + ".pdf");
+-        cv.setPdfFileSizeBytes(0L);
++        CvEntity saved = cvRepository.saveAndFlush(cv);
++        activeSelectionStore.replace(saved.getId(), studentId, configuration);
+ 
+-        CvEntity saved = cvRepository.save(cv);
+         preview.setConsumedAt(now);
+         preview.setResultCvId(saved.getId());
+         preview.setResultRevision(saved.getRevision());
+         previewRepository.save(preview);
+-        return toResponse(saved);
++
++        String eventType = nextRevision == 1 ? "CV_SAVED" : "CV_UPDATED";
++        auditEventPublisher.recordRequired(
++                actor.userId(),
++                "STUDENT",
++                eventType,
++                AuditEventCategory.CV_MANAGEMENT,
++                "CV",
++                saved.getId().toString(),
++                Map.of("revision", saved.getRevision(), "fileSizeBytes", preview.getStagedFileSizeBytes()));
++
++        registerOldAssetCleanup(oldAssetId, newAsset.getId());
++        return new CvSaveResult(toResponse(saved, configuration), nextRevision == 1);
+     }
+ 
+-    private CvResponse toResponse(CvEntity cv) {
+-        String freshnessStatus = freshnessService.getFreshness().status();
+-        String effectiveStatus = "NOT_SAVED".equals(freshnessStatus) ? "CURRENT" : freshnessStatus;
++    private CvEntity newCv(UUID studentId, OffsetDateTime now) {
++        CvEntity cv = new CvEntity();
++        cv.setId(UUID.randomUUID());
++        cv.setStudentId(studentId);
++        cv.setRevision(0);
++        cv.setCreatedAt(now);
++        return cv;
++    }
+ 
+-        var configuration = new CvPreviewConfigurationResponse(
+-                split(cv.getIncludedExperienceIds()),
+-                split(cv.getIncludedProjectIds()),
+-                split(cv.getIncludedCertificateIds()),
+-                split(cv.getIncludedAwardIds()),
+-                split(cv.getIncludedActivityIds()));
++    private void validateStagedArtifact(CvPreviewEntity preview) {
++        if (preview.getStagedStorageKey() == null
++                || preview.getStagedFileName() == null
++                || preview.getStagedFileSizeBytes() == null
++                || preview.getStagedFileSizeBytes() < 1
++                || preview.getStagedChecksumSha256() == null
++                || !preview.getStagedChecksumSha256().matches("^[0-9a-f]{64}$")) {
++            throw new CvPreviewExpiredException();
++        }
++    }
+ 
+-        long fileSize = cv.getPdfFileSizeBytes() == null ? 0L : cv.getPdfFileSizeBytes();
+-        var pdfFile = new GeneratedFileMetadataResponse(
+-                cv.getPdfFileName(), "application/pdf", fileSize, cv.getGeneratedAt());
++    private boolean isValidActiveCv(CvEntity cv) {
++        return cv.getPdfFileAssetId() != null
++                && cv.getPdfFileSizeBytes() != null
++                && cv.getPdfFileSizeBytes() > 0
++                && cv.getSourceFingerprint() != null;
++    }
+ 
+-        return new CvResponse(
+-                cv.getId(),
+-                cv.getRevision(),
+-                cv.getCreatedAt(),
+-                cv.getGeneratedAt(),
+-                cv.getSavedAt(),
+-                "/me/cv/download",
+-                effectiveStatus,
+-                configuration,
+-                pdfFile);
++    private void clearLegacySelectionColumns(CvEntity cv) {
++        cv.setIncludedExperienceIds(null);
++        cv.setIncludedProjectIds(null);
++        cv.setIncludedCertificateIds(null);
++        cv.setIncludedAwardIds(null);
++        cv.setIncludedActivityIds(null);
+     }
+ 
+-    private String join(List<UUID> ids) {
+-        return ids == null || ids.isEmpty() ? "" : ids.stream().map(UUID::toString).collect(Collectors.joining(","));
++    private void registerOldAssetCleanup(UUID oldAssetId, UUID newAssetId) {
++        if (oldAssetId == null || oldAssetId.equals(newAssetId)) return;
++        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
++            @Override
++            public void afterCommit() {
++                orphanFileCleanupService.deleteIfUnreferenced(oldAssetId);
++            }
++        });
+     }
+ 
+-    private List<UUID> split(String stored) {
+-        if (stored == null || stored.isBlank()) return List.of();
+-        return Arrays.stream(stored.split(",")).map(UUID::fromString).toList();
++    private CvResponse toResponse(CvEntity cv, CvConfiguration configuration) {
++        String freshnessStatus = freshnessService.getFreshness().status();
++        String effectiveStatus = "NOT_SAVED".equals(freshnessStatus) ? "CURRENT" : freshnessStatus;
++        var pdfFile = new GeneratedFileMetadataResponse(
++                cv.getPdfFileName(), PDF_MEDIA_TYPE, cv.getPdfFileSizeBytes(), cv.getGeneratedAt());
++        return new CvResponse(
++                cv.getId(), cv.getRevision(), cv.getCreatedAt(), cv.getGeneratedAt(), cv.getSavedAt(),
++                "/me/cv/download", effectiveStatus, configuration.toResponse(), pdfFile);
+     }
+ 
+-    private UUID currentStudentId() {
+-        var actor = currentActorProvider.currentActor()
++    private CurrentActor currentActor() {
++        return currentActorProvider.currentActor()
+                 .orElseThrow(() -> new ForbiddenException("No authenticated Student context."));
+-        StudentEntity student = studentRepository.findByUserAccountId(actor.userId())
+-                .orElseThrow(() -> new NotFoundException("Student record not found for the authenticated account."));
+-        return student.getId();
++    }
++
++    private UUID currentStudentId() {
++        CurrentActor actor = currentActor();
++        return studentRepository.findByUserAccountId(actor.userId())
++                .orElseThrow(() -> new NotFoundException("Student record not found for the authenticated account."))
++                .getId();
+     }
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSourceFreshnessUpdater.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSourceFreshnessUpdater.java
+index 921541e..b9a7772 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSourceFreshnessUpdater.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/CvSourceFreshnessUpdater.java
+@@ -1,40 +1,46 @@
+-package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
+-
+-import java.time.Clock;
+-import java.time.OffsetDateTime;
+-import java.time.ZoneOffset;
+-import java.util.Objects;
+-import java.util.UUID;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSourceFreshnessRepository;
+-import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
+-import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceFreshnessUpdatePort;
+-import org.springframework.stereotype.Component;
+-import org.springframework.transaction.annotation.Propagation;
+-import org.springframework.transaction.annotation.Transactional;
+-
+-/** PostgreSQL-backed implementation of the shared CV source-freshness invalidation boundary. */
+-@Component
+-public class CvSourceFreshnessUpdater implements CvSourceFreshnessUpdatePort {
+-
+-    private final CvSourceFreshnessRepository repository;
+-    private final Clock clock;
+-
+-    public CvSourceFreshnessUpdater(CvSourceFreshnessRepository repository, Clock clock) {
+-        this.repository = repository;
+-        this.clock = clock;
+-    }
+-
+-    @Override
+-    @Transactional(propagation = Propagation.MANDATORY)
+-    public void markChanged(UUID studentId, CvSourceArea sourceArea) {
+-        Objects.requireNonNull(studentId, "studentId must not be null");
+-        Objects.requireNonNull(sourceArea, "sourceArea must not be null");
+-        OffsetDateTime changedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+-        switch (sourceArea) {
+-            case PROFILE -> repository.upsertProfileChangedAt(studentId, changedAt);
+-            case DECLARED_SKILLS -> repository.upsertDeclaredSkillsChangedAt(studentId, changedAt);
+-            case PROJECTS -> repository.upsertProjectsChangedAt(studentId, changedAt);
+-            case ACADEMIC_RECORDS -> repository.upsertAcademicRecordsChangedAt(studentId, changedAt);
+-        }
+-    }
+-}
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
++
++import java.time.Clock;
++import java.time.OffsetDateTime;
++import java.time.ZoneOffset;
++import java.util.Objects;
++import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSourceFreshnessRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceFreshnessUpdatePort;
++import org.springframework.stereotype.Component;
++import org.springframework.transaction.annotation.Propagation;
++import org.springframework.transaction.annotation.Transactional;
++
++/** PostgreSQL-backed implementation of the shared CV source-freshness invalidation boundary. */
++@Component
++public class CvSourceFreshnessUpdater implements CvSourceFreshnessUpdatePort {
++
++    private final CvSourceFreshnessRepository repository;
++    private final Clock clock;
++
++    public CvSourceFreshnessUpdater(CvSourceFreshnessRepository repository, Clock clock) {
++        this.repository = repository;
++        this.clock = clock;
++    }
++
++    @Override
++    @Transactional(propagation = Propagation.MANDATORY)
++    public void markChanged(UUID studentId, CvSourceArea sourceArea) {
++        Objects.requireNonNull(studentId, "studentId must not be null");
++        Objects.requireNonNull(sourceArea, "sourceArea must not be null");
++        // Serialize against CV Save before taking the mutation timestamp. If a source
++        // mutation waits behind Save, its changedAt must be later than savedAt so the
++        // newly saved CV is immediately reported as OUTDATED.
++        repository.ensureRow(studentId);
++        repository.findForUpdate(studentId)
++                .orElseThrow(() -> new IllegalStateException("CV source freshness row could not be locked."));
++        OffsetDateTime changedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
++        switch (sourceArea) {
++            case PROFILE -> repository.upsertProfileChangedAt(studentId, changedAt);
++            case DECLARED_SKILLS -> repository.upsertDeclaredSkillsChangedAt(studentId, changedAt);
++            case PROJECTS -> repository.upsertProjectsChangedAt(studentId, changedAt);
++            case ACADEMIC_RECORDS -> repository.upsertAcademicRecordsChangedAt(studentId, changedAt);
++        }
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/port/ActiveCvFileResolver.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/port/ActiveCvFileResolver.java
+new file mode 100644
+index 0000000..437fc6e
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/port/ActiveCvFileResolver.java
+@@ -0,0 +1,15 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port;
++
++import java.util.UUID;
++
++/** Resolves the immutable bytes of the current saved CV without exposing storage keys or paths. */
++public interface ActiveCvFileResolver {
++    ResolvedCvFile resolve(UUID studentId);
++
++    record ResolvedCvFile(UUID cvId, int revision, String fileName, long fileSizeBytes, byte[] bytes) {
++        public ResolvedCvFile {
++            bytes = bytes.clone();
++        }
++        @Override public byte[] bytes() { return bytes.clone(); }
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/port/LatestSavedCvQuery.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/port/LatestSavedCvQuery.java
+new file mode 100644
+index 0000000..925b0a4
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/application/port/LatestSavedCvQuery.java
+@@ -0,0 +1,23 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port;
++
++import java.time.OffsetDateTime;
++import java.util.Map;
++import java.util.Optional;
++import java.util.Set;
++import java.util.UUID;
++
++/** Read-only BMD-007 boundary for Admin inspection and future bulk latest-CV export. */
++public interface LatestSavedCvQuery {
++    Optional<LatestSavedCv> findByStudentId(UUID studentId);
++    Map<UUID, LatestSavedCv> findByStudentIds(Set<UUID> studentIds);
++
++    record LatestSavedCv(
++            UUID studentId,
++            UUID cvId,
++            int revision,
++            OffsetDateTime generatedAt,
++            OffsetDateTime savedAt,
++            String freshnessStatus,
++            String fileName,
++            long fileSizeBytes) {}
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/config/CvStorageProperties.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/config/CvStorageProperties.java
+new file mode 100644
+index 0000000..5f80b90
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/config/CvStorageProperties.java
+@@ -0,0 +1,14 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.config;
++
++import java.nio.file.Path;
++import org.springframework.boot.context.properties.ConfigurationProperties;
++
++/** Private durable storage root for staged and active generated CV PDFs. */
++@ConfigurationProperties(prefix = "app.cv.storage")
++public record CvStorageProperties(Path root) {
++    public CvStorageProperties {
++        if (root == null) {
++            throw new IllegalArgumentException("app.cv.storage.root must be configured.");
++        }
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/domain/policy/CvConditionalRequestPolicy.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/domain/policy/CvConditionalRequestPolicy.java
+new file mode 100644
+index 0000000..37aafcb
+--- /dev/null
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/domain/policy/CvConditionalRequestPolicy.java
+@@ -0,0 +1,31 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.policy;
++
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvPreconditionRequiredException;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.StaleCvException;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.error.BadRequestException;
++import org.springframework.stereotype.Component;
++
++/** Enforces the OpenAPI first-create/replacement conditional request contract. */
++@Component
++public class CvConditionalRequestPolicy {
++
++    public void validate(boolean activeCvExists, int currentRevision, Long ifMatchRevision, String ifNoneMatch) {
++        if (ifNoneMatch != null && !ifNoneMatch.isBlank() && !"*".equals(ifNoneMatch.trim())) {
++            throw new BadRequestException("If-None-Match must be * when creating the first saved CV.");
++        }
++        boolean noneMatchStar = "*".equals(ifNoneMatch == null ? null : ifNoneMatch.trim());
++        if (ifMatchRevision != null && noneMatchStar) {
++            throw new BadRequestException("If-Match and If-None-Match cannot be supplied together.");
++        }
++
++        if (!activeCvExists) {
++            if (ifMatchRevision != null) throw new StaleCvException();
++            if (!noneMatchStar) throw new CvPreconditionRequiredException();
++            return;
++        }
++
++        if (noneMatchStar) throw new StaleCvException();
++        if (ifMatchRevision == null) throw new CvPreconditionRequiredException();
++        if (ifMatchRevision != currentRevision) throw new StaleCvException();
++    }
++}
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvPreviewRepository.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvPreviewRepository.java
+index 02b2cf4..0fe86f0 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvPreviewRepository.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvPreviewRepository.java
+@@ -1,13 +1,26 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository;
+ 
++import jakarta.persistence.LockModeType;
+ import java.time.OffsetDateTime;
+ import java.util.List;
+ import java.util.Optional;
+ import java.util.UUID;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvPreviewEntity;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.Lock;
++import org.springframework.data.jpa.repository.Query;
++import org.springframework.data.repository.query.Param;
+ 
+ public interface CvPreviewRepository extends JpaRepository<CvPreviewEntity, UUID> {
+     Optional<CvPreviewEntity> findByPreviewIdAndStudentId(UUID previewId, UUID studentId);
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
++    @Query("select p from CvPreviewEntity p where p.previewId = :previewId and p.studentId = :studentId")
++    Optional<CvPreviewEntity> findOwnedForUpdate(@Param("previewId") UUID previewId, @Param("studentId") UUID studentId);
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
+     List<CvPreviewEntity> findTop100ByConsumedAtIsNullAndExpiresAtBeforeOrderByExpiresAtAsc(OffsetDateTime cutoff);
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
++    List<CvPreviewEntity> findTop100ByConsumedAtIsNotNullAndConsumedAtBeforeOrderByConsumedAtAsc(OffsetDateTime cutoff);
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvRepository.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvRepository.java
+index 032c30a..7a75d42 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvRepository.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvRepository.java
+@@ -1,10 +1,43 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository;
+ 
++import jakarta.persistence.LockModeType;
++import java.util.Collection;
++import java.util.List;
+ import java.util.Optional;
+ import java.util.UUID;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvEntity;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.Lock;
++import org.springframework.data.jpa.repository.Query;
++import org.springframework.data.repository.query.Param;
+ 
+ public interface CvRepository extends JpaRepository<CvEntity, UUID> {
+     Optional<CvEntity> findByStudentId(UUID studentId);
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
++    @Query("select c from CvEntity c where c.studentId = :studentId")
++    Optional<CvEntity> findByStudentIdForUpdate(@Param("studentId") UUID studentId);
++
++    @Query("""
++            select c from CvEntity c
++            where c.studentId = :studentId
++              and c.pdfFileAssetId is not null
++              and c.pdfFileSizeBytes is not null
++              and c.pdfFileSizeBytes > 0
++              and c.sourceFingerprint is not null
++            """)
++    Optional<CvEntity> findActiveByStudentId(@Param("studentId") UUID studentId);
++
++
++    @Query("""
++            select c from CvEntity c
++            where c.studentId in :studentIds
++              and c.pdfFileAssetId is not null
++              and c.pdfFileSizeBytes is not null
++              and c.pdfFileSizeBytes > 0
++              and c.sourceFingerprint is not null
++            """)
++    List<CvEntity> findAllActiveByStudentIdIn(@Param("studentIds") Collection<UUID> studentIds);
++
++    boolean existsByPdfFileAssetId(UUID pdfFileAssetId);
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvSourceFreshnessRepository.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvSourceFreshnessRepository.java
+index 8f757d2..1033efa 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvSourceFreshnessRepository.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/persistence/repository/CvSourceFreshnessRepository.java
+@@ -1,26 +1,32 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository;
+ 
++import jakarta.persistence.LockModeType;
+ import java.time.OffsetDateTime;
++import java.util.Optional;
+ import java.util.UUID;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSourceFreshnessEntity;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.Lock;
+ import org.springframework.data.jpa.repository.Modifying;
+ import org.springframework.data.jpa.repository.Query;
+ import org.springframework.data.repository.query.Param;
+ 
+ public interface CvSourceFreshnessRepository extends JpaRepository<CvSourceFreshnessEntity, UUID> {
+ 
++    @Modifying
++    @Query(value = "INSERT INTO cv_source_freshness (student_id) VALUES (:studentId) ON CONFLICT (student_id) DO NOTHING", nativeQuery = true)
++    void ensureRow(@Param("studentId") UUID studentId);
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
++    @Query("select f from CvSourceFreshnessEntity f where f.studentId = :studentId")
++    Optional<CvSourceFreshnessEntity> findForUpdate(@Param("studentId") UUID studentId);
++
+     @Modifying
+     @Query(value = """
+             INSERT INTO cv_source_freshness (student_id, profile_changed_at)
+             VALUES (:studentId, :changedAt)
+             ON CONFLICT (student_id) DO UPDATE
+-            SET profile_changed_at = CASE
+-                WHEN cv_source_freshness.profile_changed_at IS NULL
+-                  OR cv_source_freshness.profile_changed_at < EXCLUDED.profile_changed_at
+-                THEN EXCLUDED.profile_changed_at
+-                ELSE cv_source_freshness.profile_changed_at
+-            END
++            SET profile_changed_at = GREATEST(cv_source_freshness.profile_changed_at, EXCLUDED.profile_changed_at)
+             """, nativeQuery = true)
+     void upsertProfileChangedAt(@Param("studentId") UUID studentId, @Param("changedAt") OffsetDateTime changedAt);
+ 
+@@ -29,12 +35,7 @@ public interface CvSourceFreshnessRepository extends JpaRepository<CvSourceFresh
+             INSERT INTO cv_source_freshness (student_id, declared_skills_changed_at)
+             VALUES (:studentId, :changedAt)
+             ON CONFLICT (student_id) DO UPDATE
+-            SET declared_skills_changed_at = CASE
+-                WHEN cv_source_freshness.declared_skills_changed_at IS NULL
+-                  OR cv_source_freshness.declared_skills_changed_at < EXCLUDED.declared_skills_changed_at
+-                THEN EXCLUDED.declared_skills_changed_at
+-                ELSE cv_source_freshness.declared_skills_changed_at
+-            END
++            SET declared_skills_changed_at = GREATEST(cv_source_freshness.declared_skills_changed_at, EXCLUDED.declared_skills_changed_at)
+             """, nativeQuery = true)
+     void upsertDeclaredSkillsChangedAt(@Param("studentId") UUID studentId, @Param("changedAt") OffsetDateTime changedAt);
+ 
+@@ -43,12 +44,7 @@ public interface CvSourceFreshnessRepository extends JpaRepository<CvSourceFresh
+             INSERT INTO cv_source_freshness (student_id, projects_changed_at)
+             VALUES (:studentId, :changedAt)
+             ON CONFLICT (student_id) DO UPDATE
+-            SET projects_changed_at = CASE
+-                WHEN cv_source_freshness.projects_changed_at IS NULL
+-                  OR cv_source_freshness.projects_changed_at < EXCLUDED.projects_changed_at
+-                THEN EXCLUDED.projects_changed_at
+-                ELSE cv_source_freshness.projects_changed_at
+-            END
++            SET projects_changed_at = GREATEST(cv_source_freshness.projects_changed_at, EXCLUDED.projects_changed_at)
+             """, nativeQuery = true)
+     void upsertProjectsChangedAt(@Param("studentId") UUID studentId, @Param("changedAt") OffsetDateTime changedAt);
+ 
+@@ -57,12 +53,7 @@ public interface CvSourceFreshnessRepository extends JpaRepository<CvSourceFresh
+             INSERT INTO cv_source_freshness (student_id, academic_records_changed_at)
+             VALUES (:studentId, :changedAt)
+             ON CONFLICT (student_id) DO UPDATE
+-            SET academic_records_changed_at = CASE
+-                WHEN cv_source_freshness.academic_records_changed_at IS NULL
+-                  OR cv_source_freshness.academic_records_changed_at < EXCLUDED.academic_records_changed_at
+-                THEN EXCLUDED.academic_records_changed_at
+-                ELSE cv_source_freshness.academic_records_changed_at
+-            END
++            SET academic_records_changed_at = GREATEST(cv_source_freshness.academic_records_changed_at, EXCLUDED.academic_records_changed_at)
+             """, nativeQuery = true)
+     void upsertAcademicRecordsChangedAt(@Param("studentId") UUID studentId, @Param("changedAt") OffsetDateTime changedAt);
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/studentprofile/persistence/repository/StudentRepository.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/studentprofile/persistence/repository/StudentRepository.java
+index 0533c54..faf73d6 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/studentprofile/persistence/repository/StudentRepository.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/modules/studentprofile/persistence/repository/StudentRepository.java
+@@ -1,10 +1,18 @@
+ package lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository;
+ 
++import jakarta.persistence.LockModeType;
+ import java.util.Optional;
+ import java.util.UUID;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.Lock;
++import org.springframework.data.jpa.repository.Query;
++import org.springframework.data.repository.query.Param;
+ 
+ public interface StudentRepository extends JpaRepository<StudentEntity, UUID> {
+     Optional<StudentEntity> findByUserAccountId(UUID userAccountId);
++
++    @Lock(LockModeType.PESSIMISTIC_WRITE)
++    @Query("select s from StudentEntity s where s.userAccountId = :userAccountId")
++    Optional<StudentEntity> findByUserAccountIdForUpdate(@Param("userAccountId") UUID userAccountId);
+ }
+diff --git a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/shared/audit/AuditEventCategory.java b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/shared/audit/AuditEventCategory.java
+index 3ccd6cf..6c9975b 100644
+--- a/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/shared/audit/AuditEventCategory.java
++++ b/src/main/java/lk/ac/ruhuna/dcs/cvmanagement/shared/audit/AuditEventCategory.java
+@@ -4,5 +4,6 @@ package lk.ac.ruhuna.dcs.cvmanagement.shared.audit;
+ public enum AuditEventCategory {
+     SECURITY,
+     ACADEMIC_LEDGER,
+-    INTERNSHIP_MANAGEMENT
++    INTERNSHIP_MANAGEMENT,
++    CV_MANAGEMENT
+ }
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+index 7cfbef2..c21d92c 100644
+--- a/src/main/resources/application.yml
++++ b/src/main/resources/application.yml
+@@ -68,6 +68,19 @@ app:
+       # Centralized because the handbooks define the weighted formula but not the final tie-breaking mode.
+       # Override through ACADEMIC_GPA_ROUNDING_MODE if institutional policy requires a different mode.
+       rounding-mode: ${ACADEMIC_GPA_ROUNDING_MODE:HALF_UP}
++  cv:
++    preview-ttl: ${CV_PREVIEW_TTL:PT15M}
++    consumed-preview-retention: ${CV_CONSUMED_PREVIEW_RETENTION:PT24H}
++    cleanup:
++      poll-delay-ms: ${CV_CLEANUP_POLL_DELAY_MS:60000}
++      orphan-grace-period: ${CV_ORPHAN_GRACE_PERIOD:PT1H}
++    storage:
++      root: ${CV_STORAGE_ROOT:./data/cv}
++    latex:
++      command: ${CV_LATEX_COMMAND:xelatex}
++      timeout: ${CV_LATEX_TIMEOUT:PT10S}
++      max-output-bytes: ${CV_PDF_MAX_BYTES:5242880}
++      max-concurrent-generations: ${CV_PDF_MAX_CONCURRENT:2}
+   security:
+     jwt:
+       issuer: ${JWT_ISSUER:cv-management}
+diff --git a/src/main/resources/templates/cv/README.md b/src/main/resources/templates/cv/README.md
+index dee890b..0b90da5 100644
+--- a/src/main/resources/templates/cv/README.md
++++ b/src/main/resources/templates/cv/README.md
+@@ -1,5 +1,7 @@
+-# CV Templates
++# ATS CV template
+ 
+-Backend-controlled ATS-compliant CV generation is approved for Version 1 but is not implemented in Sprint 1.
++`ATS-TEMPLATE-V1` is backend-controlled and single-column. `LatexCvRenderer` owns all dynamic
++content and escaping. Raw LaTeX is never accepted from or returned to clients.
+ 
+-This directory is reserved for the later CV generation sprint. Templates must not introduce CV submission, admin review, approval, rejection, or correction workflows.
++The runtime compiler is XeLaTeX with shell escape disabled. Keep required packages minimal and do
++not add parser-hostile graphical layout, charts, columns, or image-based text.
+diff --git a/src/main/resources/templates/cv/ats-cv-template.tex b/src/main/resources/templates/cv/ats-cv-template.tex
+index 5fb03d0..67c92f1 100644
+--- a/src/main/resources/templates/cv/ats-cv-template.tex
++++ b/src/main/resources/templates/cv/ats-cv-template.tex
+@@ -1,5 +1,10 @@
+-\documentclass[11pt,a4paper]{article}
+-\usepackage[margin=1in]{geometry}
++% Documentation/reference template for ATS-TEMPLATE-V1.
++% Runtime content is assembled by LatexCvRenderer from the same canonical CvDocumentModel as HTML preview.
++% This file intentionally contains no client-controlled placeholders or executable shell features.
++\documentclass[10pt,a4paper]{article}
++\usepackage[margin=1.55cm]{geometry}
++\usepackage{fontspec}
++\pagestyle{empty}
+ \begin{document}
+-Sprint 1 reserved CV template boundary. Final ATS CV layout is implemented in the approved CV generation sprint.
++% Backend-rendered single-column CV content.
+ \end{document}
+diff --git a/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/application/AdminStudentInspectionServiceTest.java b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/application/AdminStudentInspectionServiceTest.java
+index 42a60ef..6259296 100644
+--- a/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/application/AdminStudentInspectionServiceTest.java
++++ b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/adminstudents/application/AdminStudentInspectionServiceTest.java
+@@ -17,6 +17,9 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projectio
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.RegisteredStudentRow;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminStudentDetailReadRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.RegisteredStudentReadRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileResolver;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.LatestSavedCvQuery;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.RoleName;
+@@ -35,6 +38,9 @@ class AdminStudentInspectionServiceTest {
+     private final AdminProjectReadRepository projectRepository = mock(AdminProjectReadRepository.class);
+     private final AdminAcademicRecordReadRepository academicRecordRepository = mock(AdminAcademicRecordReadRepository.class);
+     private final CurrentActorProvider currentActorProvider = mock(CurrentActorProvider.class);
++    private final LatestSavedCvQuery latestSavedCvQuery = mock(LatestSavedCvQuery.class);
++    private final ActiveCvFileResolver activeCvFileResolver = mock(ActiveCvFileResolver.class);
++    private final AuditEventPublisher auditEventPublisher = mock(AuditEventPublisher.class);
+     private final AdminStudentInspectionService service = new AdminStudentInspectionService(
+             registeredRepository,
+             detailRepository,
+@@ -42,7 +48,10 @@ class AdminStudentInspectionServiceTest {
+             projectRepository,
+             academicRecordRepository,
+             new AdminStudentMapper(),
+-            currentActorProvider);
++            currentActorProvider,
++            latestSavedCvQuery,
++            activeCvFileResolver,
++            auditEventPublisher);
+ 
+     @Test
+     void returnsReadOnlyDeepDiveAndCurrentSchemaHasNoSavedCvState() {
+@@ -132,6 +141,27 @@ class AdminStudentInspectionServiceTest {
+                 .hasMessageContaining("sort");
+     }
+ 
++    @Test
++    void returnsPersistedLatestCvMetadataForRegisteredStudent() {
++        UUID studentId = UUID.randomUUID();
++        UUID cvId = UUID.randomUUID();
++        OffsetDateTime generatedAt = OffsetDateTime.parse("2026-08-19T03:00:00Z");
++        OffsetDateTime savedAt = generatedAt.plusMinutes(1);
++        when(currentActorProvider.currentActor()).thenReturn(Optional.of(adminActor()));
++        when(registeredRepository.existsRegisteredStudent(studentId)).thenReturn(true);
++        when(latestSavedCvQuery.findByStudentId(studentId)).thenReturn(Optional.of(
++                new LatestSavedCvQuery.LatestSavedCv(
++                        studentId, cvId, 3, generatedAt, savedAt, "CURRENT",
++                        "cv-" + studentId + ".pdf", 2048)));
++
++        var response = service.getLatestCv(studentId);
++
++        assertThat(response.availability().name()).isEqualTo("AVAILABLE");
++        assertThat(response.cvId()).isEqualTo(cvId);
++        assertThat(response.revision()).isEqualTo(3);
++        assertThat(response.downloadUrl()).isEqualTo("/admin/students/" + studentId + "/latest-cv/download");
++    }
++
+     private CurrentActor adminActor() {
+         return new CurrentActor(
+                 UUID.randomUUID(),
+diff --git a/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvConditionalRequestPolicyTest.java b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvConditionalRequestPolicyTest.java
+new file mode 100644
+index 0000000..460b744
+--- /dev/null
++++ b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvConditionalRequestPolicyTest.java
+@@ -0,0 +1,42 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv;
++
++import static org.assertj.core.api.Assertions.assertThatCode;
++import static org.assertj.core.api.Assertions.assertThatThrownBy;
++
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvPreconditionRequiredException;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.StaleCvException;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.policy.CvConditionalRequestPolicy;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.error.BadRequestException;
++import org.junit.jupiter.api.Test;
++
++class CvConditionalRequestPolicyTest {
++    private final CvConditionalRequestPolicy policy = new CvConditionalRequestPolicy();
++
++    @Test
++    void firstSaveRequiresIfNoneMatchStar() {
++        assertThatCode(() -> policy.validate(false, 0, null, "*")).doesNotThrowAnyException();
++        assertThatThrownBy(() -> policy.validate(false, 0, null, null))
++                .isInstanceOf(CvPreconditionRequiredException.class);
++        assertThatThrownBy(() -> policy.validate(false, 0, 1L, null))
++                .isInstanceOf(StaleCvException.class);
++    }
++
++    @Test
++    void replacementRequiresMatchingRevision() {
++        assertThatCode(() -> policy.validate(true, 4, 4L, null)).doesNotThrowAnyException();
++        assertThatThrownBy(() -> policy.validate(true, 4, null, null))
++                .isInstanceOf(CvPreconditionRequiredException.class);
++        assertThatThrownBy(() -> policy.validate(true, 4, 3L, null))
++                .isInstanceOf(StaleCvException.class);
++        assertThatThrownBy(() -> policy.validate(true, 4, null, "*"))
++                .isInstanceOf(StaleCvException.class);
++    }
++
++    @Test
++    void rejectsContradictoryOrMalformedConditionalHeaders() {
++        assertThatThrownBy(() -> policy.validate(true, 1, 1L, "*"))
++                .isInstanceOf(BadRequestException.class);
++        assertThatThrownBy(() -> policy.validate(false, 0, null, "\"anything\""))
++                .isInstanceOf(BadRequestException.class);
++    }
++}
+diff --git a/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvPreviewServiceTest.java b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvPreviewServiceTest.java
+index 5746656..85857e2 100644
+--- a/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvPreviewServiceTest.java
++++ b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvPreviewServiceTest.java
+@@ -2,6 +2,7 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
+ import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.ArgumentMatchers.anyString;
+ import static org.mockito.Mockito.mock;
+ import static org.mockito.Mockito.verify;
+ import static org.mockito.Mockito.when;
+@@ -15,18 +16,19 @@ import java.util.List;
+ import java.util.Optional;
+ import java.util.Set;
+ import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.request.CvPreviewRequest;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvFreshnessResponse;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvFreshnessService;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvGenerationService;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvHtmlRenderer;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvPreviewSelectionStore;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvPreviewPersistenceService;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvPreviewService;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvSourceFingerprintService;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvSourceQueryService;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvConfiguration;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvDocumentModel;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvPreviewEntity;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvPreviewRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
+ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
+ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
+@@ -38,7 +40,7 @@ import org.mockito.ArgumentCaptor;
+ class CvPreviewServiceTest {
+ 
+     @Test
+-    void persistsDurablePreviewFingerprintAndCanonicalSelectionSnapshot() {
++    void stagesExactGeneratedPdfAndPersistsDurablePreviewMetadata() {
+         Instant instant = Instant.parse("2026-08-19T02:00:00Z");
+         Clock clock = Clock.fixed(instant, ZoneOffset.UTC);
+         UUID accountId = UUID.randomUUID();
+@@ -50,8 +52,9 @@ class CvPreviewServiceTest {
+         CvSourceQueryService sourceQuery = mock(CvSourceQueryService.class);
+         CvSourceFingerprintService fingerprints = mock(CvSourceFingerprintService.class);
+         CvHtmlRenderer htmlRenderer = mock(CvHtmlRenderer.class);
+-        CvPreviewRepository previews = mock(CvPreviewRepository.class);
+-        CvPreviewSelectionStore selections = mock(CvPreviewSelectionStore.class);
++        CvGenerationService generation = mock(CvGenerationService.class);
++        FileStoragePort storage = mock(FileStoragePort.class);
++        CvPreviewPersistenceService persistence = mock(CvPreviewPersistenceService.class);
+         CvFreshnessService freshness = mock(CvFreshnessService.class);
+ 
+         StudentEntity student = new StudentEntity();
+@@ -67,28 +70,34 @@ class CvPreviewServiceTest {
+                 new CvDocumentModel.Identity(studentId, "Student", "student@ruh.ac.lk", student.getUpdatedAt()),
+                 null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null,
+                 new CvConfiguration(List.of(experienceId), List.of(), List.of(), List.of(), List.of()));
++        byte[] pdf = "%PDF-1.7\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+         when(sourceQuery.load(any(), any())).thenReturn(document);
+         when(fingerprints.fingerprint(document)).thenReturn("a".repeat(64));
+         when(htmlRenderer.render(document)).thenReturn("<div>preview</div>");
++        when(generation.generatePdf(document)).thenReturn(pdf);
++        when(storage.store(anyString(), any())).thenReturn(new FileStoragePort.StoredFile(pdf.length, "b".repeat(64)));
+         when(freshness.getFreshness()).thenReturn(new CvFreshnessResponse(
+                 "NOT_SAVED", List.of(), null, null, OffsetDateTime.ofInstant(instant, ZoneOffset.UTC), "Not saved"));
+ 
+         CvPreviewService service = new CvPreviewService(
+-                actors, students, sourceQuery, fingerprints, htmlRenderer, previews, selections, freshness,
+-                clock, Duration.ofMinutes(15));
++                actors, students, sourceQuery, fingerprints, htmlRenderer, generation, storage, persistence,
++                freshness, clock, Duration.ofMinutes(15));
+         CvPreviewRequest request = new CvPreviewRequest(
+                 List.of(experienceId), List.of(), List.of(), List.of(), List.of());
+ 
+         var response = service.createPreview(request);
+ 
+         ArgumentCaptor<CvPreviewEntity> captor = ArgumentCaptor.forClass(CvPreviewEntity.class);
+-        verify(previews).save(captor.capture());
++        verify(persistence).persist(captor.capture(), any(CvConfiguration.class));
+         CvPreviewEntity persisted = captor.getValue();
+         assertThat(persisted.getStudentId()).isEqualTo(studentId);
+         assertThat(persisted.getSourceFingerprint()).isEqualTo("a".repeat(64));
++        assertThat(persisted.getStagedStorageKey()).matches("cv/objects/2026/08/[0-9a-f-]{36}\\.pdf");
++        assertThat(persisted.getStagedFileName()).isEqualTo("cv-" + studentId + ".pdf");
++        assertThat(persisted.getStagedFileSizeBytes()).isEqualTo((long) pdf.length);
++        assertThat(persisted.getStagedChecksumSha256()).isEqualTo("b".repeat(64));
+         assertThat(persisted.getGeneratedAt()).isEqualTo(OffsetDateTime.ofInstant(instant, ZoneOffset.UTC));
+         assertThat(persisted.getExpiresAt()).isEqualTo(persisted.getGeneratedAt().plusMinutes(15));
+-        verify(selections).save(persisted.getPreviewId(), studentId, document.configuration());
+         assertThat(response.previewId()).isEqualTo(persisted.getPreviewId());
+         assertThat(response.configuration().includedExperienceIds()).containsExactly(experienceId);
+     }
+diff --git a/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvSourceFreshnessUpdaterTest.java b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvSourceFreshnessUpdaterTest.java
+index 6031bc4..af44496 100644
+--- a/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvSourceFreshnessUpdaterTest.java
++++ b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/CvSourceFreshnessUpdaterTest.java
+@@ -1,37 +1,42 @@
+-package lk.ac.ruhuna.dcs.cvmanagement.modules.cv;
+-
+-import static org.mockito.Mockito.mock;
+-import static org.mockito.Mockito.verify;
+-
+-import java.time.Clock;
+-import java.time.Instant;
+-import java.time.OffsetDateTime;
+-import java.time.ZoneOffset;
+-import java.util.UUID;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvSourceFreshnessUpdater;
+-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSourceFreshnessRepository;
+-import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
+-import org.junit.jupiter.api.Test;
+-
+-class CvSourceFreshnessUpdaterTest {
+-
+-    private static final Instant NOW = Instant.parse("2026-08-19T02:00:00Z");
+-
+-    @Test
+-    void routesEachTypedSourceAreaToItsAtomicRepositoryUpdate() {
+-        CvSourceFreshnessRepository repository = mock(CvSourceFreshnessRepository.class);
+-        CvSourceFreshnessUpdater updater = new CvSourceFreshnessUpdater(repository, Clock.fixed(NOW, ZoneOffset.UTC));
+-        UUID studentId = UUID.randomUUID();
+-        OffsetDateTime changedAt = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
+-
+-        updater.markChanged(studentId, CvSourceArea.PROFILE);
+-        updater.markChanged(studentId, CvSourceArea.DECLARED_SKILLS);
+-        updater.markChanged(studentId, CvSourceArea.PROJECTS);
+-        updater.markChanged(studentId, CvSourceArea.ACADEMIC_RECORDS);
+-
+-        verify(repository).upsertProfileChangedAt(studentId, changedAt);
+-        verify(repository).upsertDeclaredSkillsChangedAt(studentId, changedAt);
+-        verify(repository).upsertProjectsChangedAt(studentId, changedAt);
+-        verify(repository).upsertAcademicRecordsChangedAt(studentId, changedAt);
+-    }
+-}
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv;
++
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.verify;
++import static org.mockito.Mockito.when;
++
++import java.time.Clock;
++import java.time.Instant;
++import java.time.OffsetDateTime;
++import java.time.ZoneOffset;
++import java.util.Optional;
++import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvSourceFreshnessUpdater;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSourceFreshnessEntity;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSourceFreshnessRepository;
++import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
++import org.junit.jupiter.api.Test;
++
++class CvSourceFreshnessUpdaterTest {
++
++    private static final Instant NOW = Instant.parse("2026-08-19T02:00:00Z");
++
++    @Test
++    void routesEachTypedSourceAreaToItsAtomicRepositoryUpdate() {
++        CvSourceFreshnessRepository repository = mock(CvSourceFreshnessRepository.class);
++        CvSourceFreshnessUpdater updater = new CvSourceFreshnessUpdater(repository, Clock.fixed(NOW, ZoneOffset.UTC));
++        UUID studentId = UUID.randomUUID();
++        OffsetDateTime changedAt = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
++        when(repository.findForUpdate(studentId))
++                .thenReturn(Optional.of(mock(CvSourceFreshnessEntity.class)));
++
++        updater.markChanged(studentId, CvSourceArea.PROFILE);
++        updater.markChanged(studentId, CvSourceArea.DECLARED_SKILLS);
++        updater.markChanged(studentId, CvSourceArea.PROJECTS);
++        updater.markChanged(studentId, CvSourceArea.ACADEMIC_RECORDS);
++
++        verify(repository).upsertProfileChangedAt(studentId, changedAt);
++        verify(repository).upsertDeclaredSkillsChangedAt(studentId, changedAt);
++        verify(repository).upsertProjectsChangedAt(studentId, changedAt);
++        verify(repository).upsertAcademicRecordsChangedAt(studentId, changedAt);
++    }
++}
+diff --git a/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/LatexCvRendererTest.java b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/LatexCvRendererTest.java
+new file mode 100644
+index 0000000..4b1b5b3
+--- /dev/null
++++ b/src/test/java/lk/ac/ruhuna/dcs/cvmanagement/modules/cv/LatexCvRendererTest.java
+@@ -0,0 +1,45 @@
++package lk.ac.ruhuna.dcs.cvmanagement.modules.cv;
++
++import static org.assertj.core.api.Assertions.assertThat;
++
++import java.time.OffsetDateTime;
++import java.util.List;
++import java.util.UUID;
++import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex.LatexCvRenderer;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvConfiguration;
++import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvDocumentModel;
++import org.junit.jupiter.api.Test;
++
++class LatexCvRendererTest {
++
++    private final LatexCvRenderer renderer = new LatexCvRenderer();
++
++    @Test
++    void escapesTexMetacharactersAndKeepsFixedAtsSectionOrder() {
++        UUID studentId = UUID.randomUUID();
++        OffsetDateTime now = OffsetDateTime.parse("2026-08-19T02:00:00Z");
++        var model = new CvDocumentModel(
++                new CvDocumentModel.Identity(studentId, "A&B_Student #1", "student@dcs.ruh.ac.lk", now),
++                new CvDocumentModel.Profile(UUID.randomUUID(), null, null, "Java % Developer", "Uses {Spring} & SQL", null, null, 1L, now),
++                List.of(),
++                List.of(new CvDocumentModel.DeclaredSkill(UUID.randomUUID(), UUID.randomUUID(), "Java", "ADVANCED", 1, 1L, now)),
++                List.of(), List.of(), List.of(), List.of(), List.of(), null,
++                new CvConfiguration(List.of(), List.of(), List.of(), List.of(), List.of()));
++
++        String latex = renderer.render(model);
++
++        assertThat(latex).contains("A\\&B\\_Student \\#1");
++        assertThat(latex).contains("Java \\% Developer");
++        assertThat(latex).contains("Uses \\{Spring\\} \\& SQL");
++        assertThat(latex).contains("\\cvsection{Professional Summary}");
++        assertThat(latex).contains("\\cvsection{Skills}");
++        assertThat(latex.indexOf("Professional Summary")).isLessThan(latex.indexOf("Skills"));
++        assertThat(latex).doesNotContain("\\write18");
++    }
++
++    @Test
++    void escapesAllControlMetacharactersUsedBySourceText() {
++        assertThat(renderer.escape("\\{}$&#%_~^"))
++                .isEqualTo("\\textbackslash{}\\{\\}\\$\\&\\#\\%\\_\\textasciitilde{}\\textasciicircum{}");
++    }
++}

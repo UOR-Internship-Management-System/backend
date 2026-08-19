@@ -1,24 +1,28 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
 
+import java.io.ByteArrayInputStream;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStorageException;
+import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.request.CvPreviewRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvPreviewResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvGenerationFailedException;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.model.CvConfiguration;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvPreviewEntity;
-import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvPreviewRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-/** Creates a durable, owner-scoped preview snapshot from authoritative Student source data. */
+/** Creates an owner-scoped preview and stages the exact PDF candidate that a later Save promotes. */
 @Service
 public class CvPreviewService {
 
@@ -27,8 +31,9 @@ public class CvPreviewService {
     private final CvSourceQueryService sourceQueryService;
     private final CvSourceFingerprintService fingerprintService;
     private final CvHtmlRenderer htmlRenderer;
-    private final CvPreviewRepository previewRepository;
-    private final CvPreviewSelectionStore selectionStore;
+    private final CvGenerationService generationService;
+    private final FileStoragePort cvFileStorage;
+    private final CvPreviewPersistenceService persistenceService;
     private final CvFreshnessService freshnessService;
     private final Clock clock;
     private final Duration previewTtl;
@@ -39,8 +44,9 @@ public class CvPreviewService {
             CvSourceQueryService sourceQueryService,
             CvSourceFingerprintService fingerprintService,
             CvHtmlRenderer htmlRenderer,
-            CvPreviewRepository previewRepository,
-            CvPreviewSelectionStore selectionStore,
+            CvGenerationService generationService,
+            @Qualifier("cvFileStorage") FileStoragePort cvFileStorage,
+            CvPreviewPersistenceService persistenceService,
             CvFreshnessService freshnessService,
             Clock clock,
             @Value("${app.cv.preview-ttl:PT15M}") Duration previewTtl) {
@@ -49,34 +55,61 @@ public class CvPreviewService {
         this.sourceQueryService = sourceQueryService;
         this.fingerprintService = fingerprintService;
         this.htmlRenderer = htmlRenderer;
-        this.previewRepository = previewRepository;
-        this.selectionStore = selectionStore;
+        this.generationService = generationService;
+        this.cvFileStorage = cvFileStorage;
+        this.persistenceService = persistenceService;
         this.freshnessService = freshnessService;
         this.clock = clock;
         this.previewTtl = previewTtl;
     }
 
-    @Transactional
+    /**
+     * External PDF compilation and filesystem I/O intentionally occur outside a database transaction.
+     * Only the final preview metadata + selection snapshot is committed atomically.
+     */
     public CvPreviewResponse createPreview(CvPreviewRequest request) {
         StudentEntity student = currentStudent();
         CvConfiguration configuration = CvConfiguration.from(request);
         var document = sourceQueryService.load(student, configuration);
         String sourceFingerprint = fingerprintService.fingerprint(document);
         String htmlPreview = htmlRenderer.render(document);
+        byte[] pdf = generationService.generatePdf(document);
 
-        OffsetDateTime generatedAt = OffsetDateTime.now(clock);
+        OffsetDateTime generatedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         OffsetDateTime expiresAt = generatedAt.plus(previewTtl);
         UUID previewId = UUID.randomUUID();
+        String fileName = "cv-" + student.getId() + ".pdf";
+        String storageKey = storageKey(previewId, generatedAt);
+
+        FileStoragePort.StoredFile stored;
+        try {
+            stored = cvFileStorage.store(storageKey, new ByteArrayInputStream(pdf));
+        } catch (FileStorageException exception) {
+            throw new CvGenerationFailedException();
+        }
+        if (stored.sizeBytes() != pdf.length || stored.sizeBytes() < 1) {
+            deleteQuietly(storageKey);
+            throw new CvGenerationFailedException();
+        }
 
         CvPreviewEntity preview = new CvPreviewEntity();
         preview.setPreviewId(previewId);
         preview.setStudentId(student.getId());
         preview.setSourceFingerprint(sourceFingerprint);
+        preview.setStagedStorageKey(storageKey);
+        preview.setStagedFileName(fileName);
+        preview.setStagedFileSizeBytes(stored.sizeBytes());
+        preview.setStagedChecksumSha256(stored.checksumSha256());
         preview.setGeneratedAt(generatedAt);
         preview.setExpiresAt(expiresAt);
         preview.setCreatedAt(generatedAt);
-        previewRepository.save(preview);
-        selectionStore.save(previewId, student.getId(), configuration);
+
+        try {
+            persistenceService.persist(preview, configuration);
+        } catch (RuntimeException exception) {
+            deleteQuietly(storageKey);
+            throw exception;
+        }
 
         return new CvPreviewResponse(
                 previewId,
@@ -85,6 +118,19 @@ public class CvPreviewService {
                 configuration.toResponse(),
                 generatedAt,
                 expiresAt);
+    }
+
+    private String storageKey(UUID previewId, OffsetDateTime generatedAt) {
+        return "cv/objects/%04d/%02d/%s.pdf".formatted(
+                generatedAt.getYear(), generatedAt.getMonthValue(), previewId);
+    }
+
+    private void deleteQuietly(String storageKey) {
+        try {
+            cvFileStorage.delete(storageKey);
+        } catch (RuntimeException ignored) {
+            // Cleanup is best effort here; the object is opaque and can be reclaimed operationally.
+        }
     }
 
     private StudentEntity currentStudent() {

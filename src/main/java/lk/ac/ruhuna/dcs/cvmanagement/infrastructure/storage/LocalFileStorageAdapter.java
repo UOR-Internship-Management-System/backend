@@ -12,7 +12,6 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
-import org.springframework.stereotype.Component;
 
 /**
  * Local-filesystem implementation of {@link FileStoragePort}.
@@ -21,7 +20,6 @@ import org.springframework.stereotype.Component;
  * filesystem supports it. This prevents partially written source files from appearing at their final
  * storage key.
  */
-@Component
 public class LocalFileStorageAdapter implements FileStoragePort {
 
     private static final int BUFFER_SIZE = 16 * 1024;
@@ -29,7 +27,14 @@ public class LocalFileStorageAdapter implements FileStoragePort {
     private final Path root;
 
     public LocalFileStorageAdapter(StorageProperties properties) {
-        this.root = properties.root().toAbsolutePath().normalize();
+        this(properties.root());
+    }
+
+    public LocalFileStorageAdapter(Path root) {
+        if (root == null) {
+            throw new IllegalArgumentException("storage root must not be null");
+        }
+        this.root = root.toAbsolutePath().normalize();
         initializeRoot();
     }
 
