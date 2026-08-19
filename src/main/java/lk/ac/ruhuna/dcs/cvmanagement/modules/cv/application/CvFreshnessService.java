@@ -52,7 +52,7 @@ public class CvFreshnessService {
     public CvFreshnessResponse getFreshness() {
         UUID studentId = currentStudentId();
         OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
-        var savedCv = cvRepository.findByStudentId(studentId);
+        var savedCv = cvRepository.findActiveByStudentId(studentId);
 
         if (savedCv.isEmpty()) {
             return new CvFreshnessResponse(

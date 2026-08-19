@@ -2,13 +2,16 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.cv;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvSourceFreshnessUpdater;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSourceFreshnessEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository.CvSourceFreshnessRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
 import org.junit.jupiter.api.Test;
@@ -23,6 +26,8 @@ class CvSourceFreshnessUpdaterTest {
         CvSourceFreshnessUpdater updater = new CvSourceFreshnessUpdater(repository, Clock.fixed(NOW, ZoneOffset.UTC));
         UUID studentId = UUID.randomUUID();
         OffsetDateTime changedAt = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
+        when(repository.findForUpdate(studentId))
+                .thenReturn(Optional.of(mock(CvSourceFreshnessEntity.class)));
 
         updater.markChanged(studentId, CvSourceArea.PROFILE);
         updater.markChanged(studentId, CvSourceArea.DECLARED_SKILLS);

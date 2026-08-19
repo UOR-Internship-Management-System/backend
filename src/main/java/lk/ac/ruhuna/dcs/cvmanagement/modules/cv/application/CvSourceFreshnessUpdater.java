@@ -29,6 +29,12 @@ public class CvSourceFreshnessUpdater implements CvSourceFreshnessUpdatePort {
     public void markChanged(UUID studentId, CvSourceArea sourceArea) {
         Objects.requireNonNull(studentId, "studentId must not be null");
         Objects.requireNonNull(sourceArea, "sourceArea must not be null");
+        // Serialize against CV Save before taking the mutation timestamp. If a source
+        // mutation waits behind Save, its changedAt must be later than savedAt so the
+        // newly saved CV is immediately reported as OUTDATED.
+        repository.ensureRow(studentId);
+        repository.findForUpdate(studentId)
+                .orElseThrow(() -> new IllegalStateException("CV source freshness row could not be locked."));
         OffsetDateTime changedAt = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         switch (sourceArea) {
             case PROFILE -> repository.upsertProfileChangedAt(studentId, changedAt);

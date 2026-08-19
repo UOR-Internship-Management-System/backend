@@ -10,9 +10,19 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvFreshnessService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvPreviewService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvSaveService;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.http.IfMatchSupport;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class CvController {
@@ -20,8 +30,11 @@ public class CvController {
     private final CvFreshnessService freshnessService;
     private final CvPreviewService previewService;
     private final CvSaveService saveService;
+    public CvController(
+            CvFreshnessService freshnessService,
+            CvPreviewService previewService,
+            CvSaveService saveService) {
 
-    public CvController(CvFreshnessService freshnessService, CvPreviewService previewService, CvSaveService saveService) {
         this.freshnessService = freshnessService;
         this.previewService = previewService;
         this.saveService = saveService;
@@ -39,17 +52,25 @@ public class CvController {
     }
 
     @GetMapping(ApiPaths.ME_CV)
-    public CvResponse getCurrent() {
-        return saveService.getCurrent();
+    public ResponseEntity<CvResponse> getCurrent() {
+        CvResponse response = saveService.getCurrent();
+        return ResponseEntity.ok()
+                .eTag(IfMatchSupport.formatVersion(response.revision()))
+                .body(response);
     }
 
     @PutMapping(ApiPaths.ME_CV)
-    public CvResponse save(
-        @Valid @RequestBody CvSaveRequest request,
-        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-        @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
-        Long revision = ifMatch != null ? lk.ac.ruhuna.dcs.cvmanagement.shared.http.IfMatchSupport.parseVersion(ifMatch) : null;
-        boolean noneMatchStar = "*".equals(ifNoneMatch);
-        return saveService.save(request.previewId(), revision, noneMatchStar);
+    public ResponseEntity<CvResponse> save(
+            @Valid @RequestBody CvSaveRequest request,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
+        Long revision = ifMatch == null ? null : IfMatchSupport.parseVersion(ifMatch);
+        var result = saveService.save(request.previewId(), revision, ifNoneMatch);
+        return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                .eTag(IfMatchSupport.formatVersion(result.response().revision()))
+                .body(result.response());
     }
+
 }
+
+
