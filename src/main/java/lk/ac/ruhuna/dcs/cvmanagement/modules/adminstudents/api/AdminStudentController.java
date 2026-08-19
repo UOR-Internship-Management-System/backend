@@ -6,6 +6,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.Admin
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.request.AdminStudentSearchCriteria;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminAcademicRecordResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminDeclaredSkillResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminLatestCvResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminProjectResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminStudentDetailResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response.AdminStudentListItemResponse;
@@ -13,7 +14,10 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.application.AdminStud
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.application.RegisteredStudentQueryService;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,7 +39,6 @@ public class AdminStudentController {
         this.adminStudentInspectionService = adminStudentInspectionService;
     }
 
-    /** Search, filter, sort, and paginate the live registered-Student roster. */
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public PagedResponse<AdminStudentListItemResponse> listRegisteredStudents(
             @RequestParam(required = false) Integer page,
@@ -46,13 +49,11 @@ public class AdminStudentController {
         return registeredStudentQueryService.list(new AdminStudentSearchCriteria(page, size, sort, search, level));
     }
 
-    /** Returns one registered Student's read-only profile and CV-supporting deep-dive summary. */
     @GetMapping(value = "/{studentId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public AdminStudentDetailResponse getStudentDetail(@PathVariable UUID studentId) {
         return adminStudentInspectionService.getDetail(studentId);
     }
 
-    /** Returns the selected Student's declared taxonomy skills without verification state. */
     @GetMapping(value = "/{studentId}/declared-skills", produces = MediaType.APPLICATION_JSON_VALUE)
     public PagedResponse<AdminDeclaredSkillResponse> getDeclaredSkills(
             @PathVariable UUID studentId,
@@ -60,11 +61,9 @@ public class AdminStudentController {
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String search) {
         return adminStudentInspectionService.getDeclaredSkills(
-                studentId,
-                new AdminStudentCollectionCriteria(page, size, search));
+                studentId, new AdminStudentCollectionCriteria(page, size, search));
     }
 
-    /** Returns Student-owned portfolio projects and canonical project skills read-only. */
     @GetMapping(value = "/{studentId}/projects", produces = MediaType.APPLICATION_JSON_VALUE)
     public PagedResponse<AdminProjectResponse> getProjects(
             @PathVariable UUID studentId,
@@ -72,11 +71,9 @@ public class AdminStudentController {
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String search) {
         return adminStudentInspectionService.getProjects(
-                studentId,
-                new AdminStudentCollectionCriteria(page, size, search));
+                studentId, new AdminStudentCollectionCriteria(page, size, search));
     }
 
-    /** Returns only committed official academic records for the selected registered Student. */
     @GetMapping(value = "/{studentId}/academic-records", produces = MediaType.APPLICATION_JSON_VALUE)
     public PagedResponse<AdminAcademicRecordResponse> getAcademicRecords(
             @PathVariable UUID studentId,
@@ -86,7 +83,27 @@ public class AdminStudentController {
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String courseCode) {
         return adminStudentInspectionService.getAcademicRecords(
-                studentId,
-                new AdminAcademicRecordCriteria(page, size, sort, search, courseCode));
+                studentId, new AdminAcademicRecordCriteria(page, size, sort, search, courseCode));
+    }
+
+    @GetMapping(value = "/{studentId}/latest-cv", produces = MediaType.APPLICATION_JSON_VALUE)
+    public AdminLatestCvResponse getLatestCv(@PathVariable UUID studentId) {
+        return adminStudentInspectionService.getLatestCv(studentId);
+    }
+
+    @GetMapping(value = "/{studentId}/latest-cv/download", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<ByteArrayResource> downloadLatestCv(@PathVariable UUID studentId) {
+        var file = adminStudentInspectionService.downloadLatestCv(studentId);
+        return pdfResponse(file.fileName(), file.bytes());
+    }
+
+    private ResponseEntity<ByteArrayResource> pdfResponse(String fileName, byte[] bytes) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .contentLength(bytes.length)
+                .body(new ByteArrayResource(bytes));
     }
 }

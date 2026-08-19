@@ -4,5 +4,6 @@ package lk.ac.ruhuna.dcs.cvmanagement.shared.audit;
 public enum AuditEventCategory {
     SECURITY,
     ACADEMIC_LEDGER,
-    INTERNSHIP_MANAGEMENT
+    INTERNSHIP_MANAGEMENT,
+    CV_MANAGEMENT
 }

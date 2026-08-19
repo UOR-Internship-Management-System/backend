@@ -6,6 +6,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.request.CvSaveRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvFreshnessResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvPreviewResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvDownloadService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvFreshnessService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvPreviewService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.CvSaveService;
@@ -30,14 +31,17 @@ public class CvController {
     private final CvFreshnessService freshnessService;
     private final CvPreviewService previewService;
     private final CvSaveService saveService;
+    private final CvDownloadService downloadService;
+
     public CvController(
             CvFreshnessService freshnessService,
             CvPreviewService previewService,
-            CvSaveService saveService) {
-
+            CvSaveService saveService,
+            CvDownloadService downloadService) {
         this.freshnessService = freshnessService;
         this.previewService = previewService;
         this.saveService = saveService;
+        this.downloadService = downloadService;
     }
 
     @GetMapping(ApiPaths.ME_CV + "/source-freshness")
@@ -71,6 +75,15 @@ public class CvController {
                 .body(result.response());
     }
 
+    @GetMapping(value = ApiPaths.ME_CV + "/download", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<ByteArrayResource> download() {
+        var file = downloadService.downloadCurrent();
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + file.fileName() + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .contentLength(file.fileSizeBytes())
+                .body(new ByteArrayResource(file.bytes()));
+    }
 }
-
-
