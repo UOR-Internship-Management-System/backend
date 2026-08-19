@@ -1,11 +1,16 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "cvs")
@@ -23,15 +28,16 @@ public class CvEntity {
     @Column(name = "revision", nullable = false)
     private int revision;
 
-    @Column(name = "created_at", updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
-    @Column(name = "generated_at")
+    @Column(name = "generated_at", nullable = false)
     private OffsetDateTime generatedAt;
 
-    @Column(name = "saved_at")
+    @Column(name = "saved_at", nullable = false)
     private OffsetDateTime savedAt;
 
+    /** Legacy V082 snapshot. New writes move to normalized selection tables in Patch 5. */
     @Column(name = "included_experience_ids")
     private String includedExperienceIds;
 
@@ -51,5 +57,18 @@ public class CvEntity {
     private String pdfFileName;
 
     @Column(name = "pdf_file_size_bytes")
-    private long pdfFileSizeBytes;
+    private Long pdfFileSizeBytes;
+
+    @Column(name = "source_fingerprint", length = 64, columnDefinition = "char(64)")
+    @JdbcTypeCode(SqlTypes.CHAR)
+    private String sourceFingerprint;
+
+    @Column(name = "pdf_file_asset_id")
+    private UUID pdfFileAssetId;
+
+    @Column(name = "last_saved_preview_id")
+    private UUID lastSavedPreviewId;
+
+    @Column(name = "updated_at")
+    private OffsetDateTime updatedAt;
 }
