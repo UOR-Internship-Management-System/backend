@@ -11,6 +11,8 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.entity.DeclaredS
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.entity.SkillEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.repository.DeclaredSkillRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.repository.SkillRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceFreshnessUpdatePort;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ConflictException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
@@ -31,18 +33,21 @@ public class DeclaredSkillService {
     private final DeclaredSkillRepository declaredSkillRepository;
     private final SkillRepository skillRepository;
     private final SkillMapper mapper;
+    private final CvSourceFreshnessUpdatePort cvFreshnessUpdatePort;
 
     public DeclaredSkillService(
         CurrentActorProvider currentActorProvider,
         StudentIdentityLookup studentIdentityLookup,
         DeclaredSkillRepository declaredSkillRepository,
         SkillRepository skillRepository,
-        SkillMapper mapper) {
+        SkillMapper mapper,
+        CvSourceFreshnessUpdatePort cvFreshnessUpdatePort) {
         this.currentActorProvider = currentActorProvider;
         this.studentIdentityLookup = studentIdentityLookup;
         this.declaredSkillRepository = declaredSkillRepository;
         this.skillRepository = skillRepository;
         this.mapper = mapper;
+        this.cvFreshnessUpdatePort = cvFreshnessUpdatePort;
     }
 
     private UUID currentStudentId() {
@@ -83,6 +88,7 @@ public class DeclaredSkillService {
         entity.setUpdatedAt(now);
 
         DeclaredSkillEntity saved = declaredSkillRepository.save(entity);
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.DECLARED_SKILLS);
         return mapper.toResponse(saved, skill.getSkillName());
     }
 
@@ -99,6 +105,7 @@ public class DeclaredSkillService {
         entity.setCompetencyLevel(request.competencyLevel());
         entity.setUpdatedAt(OffsetDateTime.now());
         DeclaredSkillEntity saved = declaredSkillRepository.save(entity);
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.DECLARED_SKILLS);
         return mapper.toResponse(saved, skillName(saved.getSkillId()));
     }
 
@@ -112,6 +119,7 @@ public class DeclaredSkillService {
             throw new PreconditionFailedException("Declared skill has been modified since it was last read.");
         }
         declaredSkillRepository.delete(entity);
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.DECLARED_SKILLS);
     }
 
     private String skillName(UUID skillId) {

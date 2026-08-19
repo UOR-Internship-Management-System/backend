@@ -1,5 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api;
 
+import jakarta.validation.Valid;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.request.CvPreviewRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.request.CvSaveRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response.CvFreshnessResponse;
@@ -33,7 +34,7 @@ public class CvController {
 
     @PostMapping(ApiPaths.ME_CV + "/preview")
     @ResponseStatus(HttpStatus.OK)
-    public CvPreviewResponse createPreview(@RequestBody CvPreviewRequest request) {
+    public CvPreviewResponse createPreview(@Valid @RequestBody CvPreviewRequest request) {
         return previewService.createPreview(request);
     }
 
@@ -44,7 +45,7 @@ public class CvController {
 
     @PutMapping(ApiPaths.ME_CV)
     public CvResponse save(
-        @RequestBody CvSaveRequest request,
+        @Valid @RequestBody CvSaveRequest request,
         @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
         @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) {
         Long revision = ifMatch != null ? lk.ac.ruhuna.dcs.cvmanagement.shared.http.IfMatchSupport.parseVersion(ifMatch) : null;

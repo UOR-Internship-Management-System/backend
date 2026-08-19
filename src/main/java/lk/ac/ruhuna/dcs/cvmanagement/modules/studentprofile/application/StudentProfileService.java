@@ -14,7 +14,8 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.Cer
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.ContactLinkResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.StudentProfileResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.WorkExperienceResponse;
-import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.domain.policy.CvFreshnessUpdatePort;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceFreshnessUpdatePort;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.mapper.StudentProfileMapper;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.ActivityEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.AwardEntity;
@@ -54,7 +55,7 @@ public class StudentProfileService {
     private final ActivityRepository activityRepository;
     private final WorkExperienceRepository workExperienceRepository;
     private final StudentProfileMapper mapper;
-    private final CvFreshnessUpdatePort cvFreshnessUpdatePort;
+    private final CvSourceFreshnessUpdatePort cvFreshnessUpdatePort;
 
     public StudentProfileService(
         CurrentActorProvider currentActorProvider,
@@ -66,7 +67,7 @@ public class StudentProfileService {
         ActivityRepository activityRepository,
         WorkExperienceRepository workExperienceRepository,
         StudentProfileMapper mapper,
-        CvFreshnessUpdatePort cvFreshnessUpdatePort) {
+        CvSourceFreshnessUpdatePort cvFreshnessUpdatePort) {
         this.currentActorProvider = currentActorProvider;
         this.studentRepository = studentRepository;
         this.studentProfileRepository = studentProfileRepository;
@@ -124,7 +125,7 @@ public class StudentProfileService {
         profile.setUpdatedAt(OffsetDateTime.now());
 
         StudentProfileEntity saved = studentProfileRepository.save(profile);
-        cvFreshnessUpdatePort.markStale(student.getId(), "studentprofile");
+        cvFreshnessUpdatePort.markChanged(student.getId(), CvSourceArea.PROFILE);
         return mapper.toResponse(student, saved);
     }
 
@@ -153,7 +154,7 @@ public class StudentProfileService {
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         ContactLinkEntity saved = contactLinkRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -173,7 +174,7 @@ public class StudentProfileService {
         if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         ContactLinkEntity saved = contactLinkRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -187,7 +188,7 @@ public class StudentProfileService {
             throw new PreconditionFailedException("Contact link has been modified since it was last read.");
         }
         contactLinkRepository.delete(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
     }
 
     // ---- certificates ----
@@ -216,7 +217,7 @@ public class StudentProfileService {
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         CertificateEntity saved = certificateRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -237,7 +238,7 @@ public class StudentProfileService {
         if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         CertificateEntity saved = certificateRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -251,7 +252,7 @@ public class StudentProfileService {
             throw new PreconditionFailedException("Certificate has been modified since it was last read.");
         }
         certificateRepository.delete(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
     }
 
     // ---- awards ----
@@ -280,7 +281,7 @@ public class StudentProfileService {
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         AwardEntity saved = awardRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -301,7 +302,7 @@ public class StudentProfileService {
         if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         AwardEntity saved = awardRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -315,7 +316,7 @@ public class StudentProfileService {
             throw new PreconditionFailedException("Award has been modified since it was last read.");
         }
         awardRepository.delete(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
     }
 
     // ---- activities ----
@@ -345,7 +346,7 @@ public class StudentProfileService {
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         ActivityEntity saved = activityRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -367,7 +368,7 @@ public class StudentProfileService {
         if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         ActivityEntity saved = activityRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -381,7 +382,7 @@ public class StudentProfileService {
             throw new PreconditionFailedException("Activity has been modified since it was last read.");
         }
         activityRepository.delete(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
     }
 
     // ---- work experience ----
@@ -413,7 +414,7 @@ public class StudentProfileService {
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
         WorkExperienceEntity saved = workExperienceRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -437,7 +438,7 @@ public class StudentProfileService {
         if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
         entity.setUpdatedAt(OffsetDateTime.now());
         WorkExperienceEntity saved = workExperienceRepository.save(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
         return mapper.toResponse(saved);
     }
 
@@ -451,7 +452,7 @@ public class StudentProfileService {
             throw new PreconditionFailedException("Work experience has been modified since it was last read.");
         }
         workExperienceRepository.delete(entity);
-        cvFreshnessUpdatePort.markStale(studentId, "studentprofile");
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
     }
 
     private void assertOwnership(UUID resourceStudentId, UUID currentStudentId) {

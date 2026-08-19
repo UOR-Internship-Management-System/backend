@@ -34,8 +34,13 @@ public class ProblemDetailsFactory {
     private String title(ApiErrorCode code, HttpStatus status) {
         return switch (code) {
             case VALIDATION_FAILED -> "Validation failed";
-            case IF_MATCH_REQUIRED -> "Precondition required";
-            case PRECONDITION_FAILED -> "Precondition failed";
+            case IF_MATCH_REQUIRED, PRECONDITION_REQUIRED -> "Precondition required";
+            case PRECONDITION_FAILED, STALE_VERSION -> "Precondition failed";
+            case CV_CONFIGURATION_INVALID -> "CV configuration is invalid";
+            case CV_GENERATION_FAILED -> "CV generation unavailable";
+            case CV_PREVIEW_EXPIRED -> "CV preview expired";
+            case CV_NOT_SAVED -> "No saved CV is available";
+            case CV_FILE_UNAVAILABLE -> "CV file unavailable";
             case DUPLICATE_COMPANY -> "Company already exists";
             case COMPANY_NOT_FOUND -> "Company not found";
             case INTERNSHIP_REQUEST_NOT_FOUND -> "Internship request not found";

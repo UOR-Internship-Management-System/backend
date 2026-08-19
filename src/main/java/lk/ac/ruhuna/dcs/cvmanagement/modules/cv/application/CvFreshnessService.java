@@ -1,6 +1,8 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -24,16 +26,19 @@ public class CvFreshnessService {
     private final StudentRepository studentRepository;
     private final CvRepository cvRepository;
     private final CvSourceFreshnessRepository freshnessRepository;
+    private final Clock clock;
 
     public CvFreshnessService(
         CurrentActorProvider currentActorProvider,
         StudentRepository studentRepository,
         CvRepository cvRepository,
-        CvSourceFreshnessRepository freshnessRepository) {
+        CvSourceFreshnessRepository freshnessRepository,
+        Clock clock) {
         this.currentActorProvider = currentActorProvider;
         this.studentRepository = studentRepository;
         this.cvRepository = cvRepository;
         this.freshnessRepository = freshnessRepository;
+        this.clock = clock;
     }
 
     UUID currentStudentId() {
@@ -46,7 +51,7 @@ public class CvFreshnessService {
 
     public CvFreshnessResponse getFreshness() {
         UUID studentId = currentStudentId();
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         var savedCv = cvRepository.findByStudentId(studentId);
 
         if (savedCv.isEmpty()) {

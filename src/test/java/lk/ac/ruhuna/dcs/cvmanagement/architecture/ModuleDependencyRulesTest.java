@@ -50,8 +50,7 @@ class ModuleDependencyRulesTest {
             "cv->studentprofile",
             "cv->academics",
             "cv->projects",
-            "cv->skills",
-            "studentprofile->cv");
+            "cv->skills");
 
     /** Annotation patterns that would expose accidental endpoints. */
     private static final Pattern ENDPOINT_ANNOTATION = Pattern.compile(
