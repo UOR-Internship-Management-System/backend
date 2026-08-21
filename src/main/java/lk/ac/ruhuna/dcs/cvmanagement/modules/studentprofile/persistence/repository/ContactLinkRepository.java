@@ -1,5 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository;
 
+import java.util.List;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.ContactLinkEntity;
 import org.springframework.data.domain.Page;
@@ -17,4 +18,6 @@ public interface ContactLinkRepository extends JpaRepository<ContactLinkEntity, 
             """)
     Page<ContactLinkEntity> search(
         @Param("studentId") UUID studentId, @Param("searchPattern") String searchPattern, Pageable pageable);
+    List<ContactLinkEntity> findAllByStudentIdAndCvIncludeTrueOrderByDisplayOrderAscLabelAscIdAsc(UUID studentId);
+
 }

@@ -17,6 +17,9 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projectio
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.RegisteredStudentRow;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminStudentDetailReadRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.RegisteredStudentReadRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileResolver;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.LatestSavedCvQuery;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.RoleName;
@@ -35,6 +38,9 @@ class AdminStudentInspectionServiceTest {
     private final AdminProjectReadRepository projectRepository = mock(AdminProjectReadRepository.class);
     private final AdminAcademicRecordReadRepository academicRecordRepository = mock(AdminAcademicRecordReadRepository.class);
     private final CurrentActorProvider currentActorProvider = mock(CurrentActorProvider.class);
+    private final LatestSavedCvQuery latestSavedCvQuery = mock(LatestSavedCvQuery.class);
+    private final ActiveCvFileResolver activeCvFileResolver = mock(ActiveCvFileResolver.class);
+    private final AuditEventPublisher auditEventPublisher = mock(AuditEventPublisher.class);
     private final AdminStudentInspectionService service = new AdminStudentInspectionService(
             registeredRepository,
             detailRepository,
@@ -42,7 +48,10 @@ class AdminStudentInspectionServiceTest {
             projectRepository,
             academicRecordRepository,
             new AdminStudentMapper(),
-            currentActorProvider);
+            currentActorProvider,
+            latestSavedCvQuery,
+            activeCvFileResolver,
+            auditEventPublisher);
 
     @Test
     void returnsReadOnlyDeepDiveAndCurrentSchemaHasNoSavedCvState() {
@@ -130,6 +139,27 @@ class AdminStudentInspectionServiceTest {
                         studentId,
                         new AdminAcademicRecordCriteria(0, 20, "DROP TABLE", null, null)))
                 .hasMessageContaining("sort");
+    }
+
+    @Test
+    void returnsPersistedLatestCvMetadataForRegisteredStudent() {
+        UUID studentId = UUID.randomUUID();
+        UUID cvId = UUID.randomUUID();
+        OffsetDateTime generatedAt = OffsetDateTime.parse("2026-08-19T03:00:00Z");
+        OffsetDateTime savedAt = generatedAt.plusMinutes(1);
+        when(currentActorProvider.currentActor()).thenReturn(Optional.of(adminActor()));
+        when(registeredRepository.existsRegisteredStudent(studentId)).thenReturn(true);
+        when(latestSavedCvQuery.findByStudentId(studentId)).thenReturn(Optional.of(
+                new LatestSavedCvQuery.LatestSavedCv(
+                        studentId, cvId, 3, generatedAt, savedAt, "CURRENT",
+                        "cv-" + studentId + ".pdf", 2048)));
+
+        var response = service.getLatestCv(studentId);
+
+        assertThat(response.availability().name()).isEqualTo("AVAILABLE");
+        assertThat(response.cvId()).isEqualTo(cvId);
+        assertThat(response.revision()).isEqualTo(3);
+        assertThat(response.downloadUrl()).isEqualTo("/admin/students/" + studentId + "/latest-cv/download");
     }
 
     private CurrentActor adminActor() {

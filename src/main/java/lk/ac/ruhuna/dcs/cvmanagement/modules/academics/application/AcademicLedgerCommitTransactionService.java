@@ -27,6 +27,8 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.repository.Ac
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.repository.OfficialStudentGradeRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.repository.SubjectRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceFreshnessUpdatePort;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -44,6 +46,7 @@ class AcademicLedgerCommitTransactionService {
     private final SubjectRepository subjectRepository;
     private final GpaCalculationService gpaCalculationService;
     private final AuditEventPublisher auditEventPublisher;
+    private final CvSourceFreshnessUpdatePort cvFreshnessUpdatePort;
     private final Clock clock;
 
     AcademicLedgerCommitTransactionService(
@@ -53,6 +56,7 @@ class AcademicLedgerCommitTransactionService {
             SubjectRepository subjectRepository,
             GpaCalculationService gpaCalculationService,
             AuditEventPublisher auditEventPublisher,
+            CvSourceFreshnessUpdatePort cvFreshnessUpdatePort,
             Clock clock) {
         this.uploadRepository = uploadRepository;
         this.stagingRepository = stagingRepository;
@@ -60,6 +64,7 @@ class AcademicLedgerCommitTransactionService {
         this.subjectRepository = subjectRepository;
         this.gpaCalculationService = gpaCalculationService;
         this.auditEventPublisher = auditEventPublisher;
+        this.cvFreshnessUpdatePort = cvFreshnessUpdatePort;
         this.clock = clock;
     }
 
@@ -105,6 +110,10 @@ class AcademicLedgerCommitTransactionService {
 
         int recalculatedGpaCount =
                 gpaCalculationService.recalculate(affectedStudents, uploadId, committedAt);
+
+        affectedStudents.stream()
+                .sorted()
+                .forEach(studentId -> cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.ACADEMIC_RECORDS));
 
         upload.setUploadStatus(AcademicLedgerUploadStatus.COMMITTED);
         upload.setCommittedAt(committedAt);

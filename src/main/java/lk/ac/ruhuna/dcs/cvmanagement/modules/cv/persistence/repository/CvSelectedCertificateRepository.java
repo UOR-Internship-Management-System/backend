@@ -1,0 +1,12 @@
+package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.repository;
+
+import java.util.List;
+import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvSelectedCertificateEntity;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.persistence.entity.CvActiveSelectionId;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface CvSelectedCertificateRepository extends JpaRepository<CvSelectedCertificateEntity, CvActiveSelectionId> {
+    List<CvSelectedCertificateEntity> findAllByIdCvIdOrderByIdSourceRecordIdAsc(UUID cvId);
+    void deleteAllByIdCvId(UUID cvId);
+}

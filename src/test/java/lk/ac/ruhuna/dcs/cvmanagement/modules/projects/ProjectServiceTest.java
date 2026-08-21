@@ -27,6 +27,8 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.entity.Project
 import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.entity.ProjectSkillEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.repository.ProjectRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.repository.ProjectSkillRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceFreshnessUpdatePort;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.PreconditionFailedException;
@@ -48,6 +50,7 @@ class ProjectServiceTest {
     private final ProjectSkillRepository projectSkillRepository = mock(ProjectSkillRepository.class);
     private final ProjectSkillLookup skillLookup = mock(ProjectSkillLookup.class);
     private final ProjectMapper mapper = new ProjectMapper();
+    private final CvSourceFreshnessUpdatePort cvFreshnessUpdatePort = mock(CvSourceFreshnessUpdatePort.class);
 
     private ProjectService service;
     private UUID actorId;
@@ -66,7 +69,8 @@ class ProjectServiceTest {
                 projectRepository,
                 projectSkillRepository,
                 skillLookup,
-                mapper);
+                mapper,
+                cvFreshnessUpdatePort);
     }
 
     @Test
@@ -102,6 +106,7 @@ class ProjectServiceTest {
             assertThat(actual.description()).isEqualTo("Backend framework");
         });
         verify(projectSkillRepository).save(any(ProjectSkillEntity.class));
+        verify(cvFreshnessUpdatePort).markChanged(studentId, CvSourceArea.PROJECTS);
     }
 
     @Test
@@ -205,6 +210,7 @@ class ProjectServiceTest {
         assertThat(response.includeInCv()).isFalse();
         verify(projectSkillRepository).deleteByProjectId(project.getId());
         verify(projectRepository).save(project);
+        verify(cvFreshnessUpdatePort).markChanged(studentId, CvSourceArea.PROJECTS);
     }
 
     @Test
@@ -216,6 +222,7 @@ class ProjectServiceTest {
 
         verify(projectSkillRepository).deleteByProjectId(project.getId());
         verify(projectRepository).delete(project);
+        verify(cvFreshnessUpdatePort).markChanged(studentId, CvSourceArea.PROJECTS);
     }
 
     private ProjectCreateRequest createRequest(List<UUID> skillIds) {

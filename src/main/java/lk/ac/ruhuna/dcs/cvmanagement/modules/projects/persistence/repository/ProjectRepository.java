@@ -1,5 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.repository;
 
+import java.util.List;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.entity.ProjectEntity;
 import org.springframework.data.domain.Page;
@@ -17,4 +18,6 @@ public interface ProjectRepository extends JpaRepository<ProjectEntity, UUID> {
             """)
     Page<ProjectEntity> search(
         @Param("studentId") UUID studentId, @Param("searchPattern") String searchPattern, Pageable pageable);
+    List<ProjectEntity> findAllByStudentIdAndIdIn(UUID studentId, java.util.Collection<UUID> ids);
+
 }

@@ -1,5 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository;
 
+import java.util.List;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.WorkExperienceEntity;
 import org.springframework.data.domain.Page;
@@ -17,4 +18,6 @@ public interface WorkExperienceRepository extends JpaRepository<WorkExperienceEn
             """)
     Page<WorkExperienceEntity> search(
         @Param("studentId") UUID studentId, @Param("searchPattern") String searchPattern, Pageable pageable);
+    List<WorkExperienceEntity> findAllByStudentIdAndIdIn(UUID studentId, java.util.Collection<UUID> ids);
+
 }

@@ -45,7 +45,13 @@ class ModuleDependencyRulesTest {
             ROOT_PACKAGE + ".config.");
 
     private static final Set<String> SPRINT_2_ALLOWED_MODULE_IMPORTS = Set.of(
-            "auth->verification");
+            "auth->verification",
+            "academics->studentprofile",
+            "cv->studentprofile",
+            "cv->academics",
+            "cv->projects",
+            "cv->skills",
+            "adminstudents->cv");
 
     /** Annotation patterns that would expose accidental endpoints. */
     private static final Pattern ENDPOINT_ANNOTATION = Pattern.compile(
@@ -154,13 +160,44 @@ class ModuleDependencyRulesTest {
     }
 
     @Test
+    void adminStudentsUsesOnlyCvApplicationPortsAcrossModuleBoundary() throws IOException {
+        Path moduleDir = SRC_MAIN_JAVA.resolve(MODULES_PACKAGE.replace('.', '/') + "/adminstudents");
+        String allowedPrefix = MODULES_PACKAGE + ".cv.application.port.";
+        String cvPrefix = MODULES_PACKAGE + ".cv.";
+        List<String> violations = new ArrayList<>();
+
+        try (Stream<Path> files = Files.walk(moduleDir)) {
+            files.filter(p -> p.toString().endsWith(".java"))
+                    .filter(Files::isRegularFile)
+                    .forEach(path -> {
+                        try {
+                            for (String line : Files.readAllLines(path, StandardCharsets.UTF_8)) {
+                                if (!line.startsWith("import ")) {
+                                    continue;
+                                }
+                                String imported = line.substring(7).replace(";", "").trim();
+                                if (imported.startsWith(cvPrefix) && !imported.startsWith(allowedPrefix)) {
+                                    violations.add(path.getFileName() + " imports CV implementation detail: " + imported);
+                                }
+                            }
+                        } catch (IOException exception) {
+                            throw new IllegalStateException("Cannot read " + path, exception);
+                        }
+                    });
+        }
+
+        assertThat(violations)
+                .as("Admin Student Inspection must consume BMD-007 through application ports only")
+                .isEmpty();
+    }
+
+    @Test
     void futureModuleControllersDoNotExposeEndpoints() throws IOException {
         List<String> violations = new ArrayList<>();
 
-        // Modules with approved HTTP endpoints in the current codebase.
         Set<String> activeModules = Set.of(
                 "health", "auth", "verification", "studentprofile", "admindashboard", "skills", "academics",
-                "adminstudents", "companies", "internships", "projects");
+                "adminstudents", "companies", "internships", "projects", "cv");
 
         for (String moduleName : MODULE_NAMES) {
             if (activeModules.contains(moduleName)) {

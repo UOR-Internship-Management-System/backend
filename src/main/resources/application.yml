@@ -68,6 +68,19 @@ app:
       # Centralized because the handbooks define the weighted formula but not the final tie-breaking mode.
       # Override through ACADEMIC_GPA_ROUNDING_MODE if institutional policy requires a different mode.
       rounding-mode: ${ACADEMIC_GPA_ROUNDING_MODE:HALF_UP}
+  cv:
+    preview-ttl: ${CV_PREVIEW_TTL:PT15M}
+    consumed-preview-retention: ${CV_CONSUMED_PREVIEW_RETENTION:PT24H}
+    cleanup:
+      poll-delay-ms: ${CV_CLEANUP_POLL_DELAY_MS:60000}
+      orphan-grace-period: ${CV_ORPHAN_GRACE_PERIOD:PT1H}
+    storage:
+      root: ${CV_STORAGE_ROOT:./data/cv}
+    latex:
+      command: ${CV_LATEX_COMMAND:xelatex}
+      timeout: ${CV_LATEX_TIMEOUT:PT10S}
+      max-output-bytes: ${CV_PDF_MAX_BYTES:5242880}
+      max-concurrent-generations: ${CV_PDF_MAX_CONCURRENT:2}
   security:
     jwt:
       issuer: ${JWT_ISSUER:cv-management}

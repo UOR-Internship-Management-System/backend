@@ -16,6 +16,8 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.entity.Project
 import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.entity.ProjectSkillEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.repository.ProjectRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.projects.persistence.repository.ProjectSkillRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceFreshnessUpdatePort;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.PreconditionFailedException;
@@ -38,6 +40,7 @@ public class ProjectService {
     private final ProjectSkillRepository projectSkillRepository;
     private final ProjectSkillLookup skillLookup;
     private final ProjectMapper mapper;
+    private final CvSourceFreshnessUpdatePort cvFreshnessUpdatePort;
 
     public ProjectService(
         CurrentActorProvider currentActorProvider,
@@ -45,13 +48,15 @@ public class ProjectService {
         ProjectRepository projectRepository,
         ProjectSkillRepository projectSkillRepository,
         ProjectSkillLookup skillLookup,
-        ProjectMapper mapper) {
+        ProjectMapper mapper,
+        CvSourceFreshnessUpdatePort cvFreshnessUpdatePort) {
         this.currentActorProvider = currentActorProvider;
         this.studentIdentityLookup = studentIdentityLookup;
         this.projectRepository = projectRepository;
         this.projectSkillRepository = projectSkillRepository;
         this.skillLookup = skillLookup;
         this.mapper = mapper;
+        this.cvFreshnessUpdatePort = cvFreshnessUpdatePort;
     }
 
     private UUID currentStudentId() {
@@ -148,6 +153,7 @@ public class ProjectService {
         ProjectEntity saved = projectRepository.save(entity);
 
         replaceSkillLinks(saved.getId(), skillIds);
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROJECTS);
         return mapper.toResponse(saved, loadSkills(saved.getId()));
     }
 
@@ -176,6 +182,7 @@ public class ProjectService {
         if (skillIds != null) {
             replaceSkillLinks(saved.getId(), skillIds);
         }
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROJECTS);
         return mapper.toResponse(saved, loadSkills(saved.getId()));
     }
 
@@ -190,6 +197,7 @@ public class ProjectService {
         }
         projectSkillRepository.deleteByProjectId(projectId);
         projectRepository.delete(entity);
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROJECTS);
     }
 
     private void assertOwnership(UUID resourceStudentId, UUID currentStudentId) {

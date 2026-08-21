@@ -25,6 +25,13 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.Adm
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminProjectReadRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.AdminStudentDetailReadRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.RegisteredStudentReadRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileResolver;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.LatestSavedCvQuery;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ApiErrorCode;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ApplicationException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
@@ -50,6 +57,9 @@ public class AdminStudentInspectionService {
     private final AdminAcademicRecordReadRepository academicRecordRepository;
     private final AdminStudentMapper mapper;
     private final CurrentActorProvider currentActorProvider;
+    private final LatestSavedCvQuery latestSavedCvQuery;
+    private final ActiveCvFileResolver activeCvFileResolver;
+    private final AuditEventPublisher auditEventPublisher;
 
     public AdminStudentInspectionService(
             RegisteredStudentReadRepository registeredStudentRepository,
@@ -58,7 +68,10 @@ public class AdminStudentInspectionService {
             AdminProjectReadRepository projectRepository,
             AdminAcademicRecordReadRepository academicRecordRepository,
             AdminStudentMapper mapper,
-            CurrentActorProvider currentActorProvider) {
+            CurrentActorProvider currentActorProvider,
+            LatestSavedCvQuery latestSavedCvQuery,
+            ActiveCvFileResolver activeCvFileResolver,
+            AuditEventPublisher auditEventPublisher) {
         this.registeredStudentRepository = registeredStudentRepository;
         this.detailRepository = detailRepository;
         this.declaredSkillRepository = declaredSkillRepository;
@@ -66,6 +79,9 @@ public class AdminStudentInspectionService {
         this.academicRecordRepository = academicRecordRepository;
         this.mapper = mapper;
         this.currentActorProvider = currentActorProvider;
+        this.latestSavedCvQuery = latestSavedCvQuery;
+        this.activeCvFileResolver = activeCvFileResolver;
+        this.auditEventPublisher = auditEventPublisher;
     }
 
     /**
@@ -98,16 +114,66 @@ public class AdminStudentInspectionService {
                     detailRepository.findAwards(safeStudentId),
                     detailRepository.findActivities(safeStudentId));
 
-            /*
-             * BMD-007 persisted CV lifecycle is not present in the current source/database yet.
-             * Patch 5 replaces this availability value with the persisted latest-CV read repository.
-             */
-            AdminLatestCvResponse latestCv = AdminLatestCvResponse.notSaved();
+            AdminLatestCvResponse latestCv = toAdminLatestCv(safeStudentId);
             return mapper.toDetail(student, profile, supportingData, latestCv);
         } catch (DataAccessException exception) {
             LOGGER.error("Admin Student deep-dive could not load persisted Student inspection data.", exception);
             throw AdminStudentErrors.studentDataUnavailable(exception);
         }
+    }
+
+    /** Returns latest saved CV availability without creating any review/submission state. */
+    @Transactional(readOnly = true)
+    public AdminLatestCvResponse getLatestCv(UUID studentId) {
+        currentAdmin();
+        UUID safeStudentId = requireRegisteredStudent(studentId);
+        return toAdminLatestCv(safeStudentId);
+    }
+
+    /** Resolves the exact active PDF for an audited Admin download. */
+    @Transactional
+    public ActiveCvFileResolver.ResolvedCvFile downloadLatestCv(UUID studentId) {
+        CurrentActor actor = currentAdmin();
+        UUID safeStudentId = requireRegisteredStudent(studentId);
+        ActiveCvFileResolver.ResolvedCvFile file;
+        try {
+            file = activeCvFileResolver.resolve(safeStudentId);
+        } catch (ApplicationException exception) {
+            if (exception.getErrorCode() == ApiErrorCode.CV_FILE_UNAVAILABLE) {
+                auditEventPublisher.recordBestEffort(
+                        actor.userId(),
+                        "ADMIN",
+                        AuditEventType.CV_FILE_UNAVAILABLE.name(),
+                        AuditEventCategory.CV_MANAGEMENT,
+                        "STUDENT_CV",
+                        safeStudentId.toString(),
+                        Map.of());
+            }
+            throw exception;
+        }
+        auditEventPublisher.recordRequired(
+                actor.userId(),
+                "ADMIN",
+                AuditEventType.CV_DOWNLOADED_BY_ADMIN.name(),
+                AuditEventCategory.CV_MANAGEMENT,
+                "CV",
+                file.cvId().toString(),
+                Map.of("studentId", safeStudentId.toString(), "revision", file.revision(), "fileSizeBytes", file.fileSizeBytes()));
+        return file;
+    }
+
+    private AdminLatestCvResponse toAdminLatestCv(UUID studentId) {
+        return latestSavedCvQuery.findByStudentId(studentId)
+                .map(cv -> AdminLatestCvResponse.available(
+                        cv.cvId(),
+                        cv.revision(),
+                        cv.generatedAt(),
+                        cv.savedAt(),
+                        lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.model.CvFreshnessStatus.valueOf(cv.freshnessStatus()),
+                        cv.fileName(),
+                        cv.fileSizeBytes(),
+                        studentId))
+                .orElseGet(AdminLatestCvResponse::notSaved);
     }
 
     /** Returns a bounded, deterministic page of declared skills for one registered Student. */

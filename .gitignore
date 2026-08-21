@@ -33,3 +33,5 @@ target/
 # Local Postman/Newman acceptance secrets and reports
 postman/company-internship/*.local.postman_environment.json
 postman/company-internship/reports/
+postman/cv-generation/*.local.postman_environment.json
+postman/cv-generation/reports/

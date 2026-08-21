@@ -3,13 +3,14 @@ package lk.ac.ruhuna.dcs.cvmanagement.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
-import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.jdbc.DataSourceBuilder;
@@ -22,7 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    private static final int LATEST_MIGRATION_COUNT = 43;
+    private static final int LATEST_MIGRATION_COUNT = 48;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -31,11 +32,12 @@ class FlywayMigrationTest {
                     .withUsername("cv_user")
                     .withPassword("cv_local_password");
 
-    private DataSource dataSource;
+    private HikariDataSource dataSource;
 
     @BeforeEach
     void resetDatabase() throws SQLException {
         dataSource = DataSourceBuilder.create()
+                .type(HikariDataSource.class)
                 .url(POSTGRES.getJdbcUrl())
                 .username(POSTGRES.getUsername())
                 .password(POSTGRES.getPassword())
@@ -48,6 +50,13 @@ class FlywayMigrationTest {
             statement.execute("DROP SCHEMA IF EXISTS system CASCADE");
             statement.execute("DROP SCHEMA public CASCADE");
             statement.execute("CREATE SCHEMA public");
+        }
+    }
+
+    @AfterEach
+    void closeDataSource() {
+        if (dataSource != null) {
+            dataSource.close();
         }
     }
 
@@ -73,6 +82,16 @@ class FlywayMigrationTest {
         assertThat(tableExists("public", "companies")).isTrue();
         assertThat(tableExists("public", "internship_requests")).isTrue();
         assertThat(tableExists("public", "internship_request_skills")).isTrue();
+        assertThat(tableExists("public", "cv_previews")).isTrue();
+        assertThat(tableExists("public", "cv_selected_experiences")).isTrue();
+        assertThat(tableExists("public", "cv_selected_projects")).isTrue();
+        assertThat(tableExists("public", "cv_selected_certificates")).isTrue();
+        assertThat(tableExists("public", "cv_selected_awards")).isTrue();
+        assertThat(tableExists("public", "cv_selected_activities")).isTrue();
+        assertThat(tableExists("public", "cv_preview_experiences")).isTrue();
+        assertThat(columnExists("public", "cvs", "source_fingerprint")).isTrue();
+        assertThat(columnExists("public", "cvs", "pdf_file_asset_id")).isTrue();
+        assertThat(columnExists("public", "cvs", "last_saved_preview_id")).isTrue();
         assertThat(columnExists("public", "companies", "active")).isFalse();
         assertThat(columnExists("public", "internship_requests", "status")).isFalse();
         assertThat(columnExists("public", "internship_requests", "minimum_gpa")).isFalse();
@@ -118,6 +137,39 @@ class FlywayMigrationTest {
                                 + "WHERE course_code IN ('CSC3133', 'CSC3152', 'CSC3162', 'CSC4282')",
                         Integer.class))
                 .isEqualTo(4);
+    }
+
+    @Test
+    void cvFoundationUpgradesVersion82AndBackfillsLegacySelections() {
+        Flyway throughVersion82 = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .target("82")
+                .load();
+        assertThat(throughVersion82.migrate().success).isTrue();
+
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        UUID studentId = UUID.fromString("97000000-0000-4000-8000-000000000001");
+        UUID experienceId = UUID.fromString("97000000-0000-4000-8000-000000000002");
+        UUID projectId = UUID.fromString("97000000-0000-4000-8000-000000000003");
+        jdbc.update("""
+                INSERT INTO eligible_students (id, index_number, university_email, full_name, academic_level, is_active)
+                VALUES (?, 'SC/2026/07001', 'sc202607001@dcs.ruh.ac.lk', 'CV Migration Student', 3, TRUE)
+                """, studentId);
+        jdbc.update("""
+                INSERT INTO cvs (id, student_id, revision, included_experience_ids, included_project_ids, pdf_file_size_bytes)
+                VALUES ('97000000-0000-4000-8000-000000000010', ?, 1, ?, ?, 0)
+                """, studentId, experienceId.toString(), projectId.toString());
+
+        assertThat(flyway().migrate().success).isTrue();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM cv_source_freshness WHERE student_id = ?", Integer.class, studentId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM cv_selected_experiences WHERE cv_id = '97000000-0000-4000-8000-000000000010' AND source_record_id = ?",
+                Integer.class, experienceId)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM cv_selected_projects WHERE cv_id = '97000000-0000-4000-8000-000000000010' AND source_record_id = ?",
+                Integer.class, projectId)).isEqualTo(1);
     }
 
     @Test
