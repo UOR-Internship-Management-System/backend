@@ -63,8 +63,8 @@ class CvPersistencePostgresAcceptanceTest {
         assertThat(tableExists("cv_selected_projects")).isTrue();
         assertThat(tableExists("cv_preview_projects")).isTrue();
 
-        insertStudent(studentOne, "81000001", "cv.acceptance.one@ruh.ac.lk");
-        insertStudent(studentTwo, "81000002", "cv.acceptance.two@ruh.ac.lk");
+        insertStudent(studentOne, "SC/2026/81001", "cv.acceptance.one@ruh.ac.lk");
+        insertStudent(studentTwo, "SC/2026/81002", "cv.acceptance.two@ruh.ac.lk");
         UUID cvId = UUID.randomUUID();
         jdbc.update("""
                 INSERT INTO cvs (
@@ -88,7 +88,7 @@ class CvPersistencePostgresAcceptanceTest {
 
     @Test
     void databaseAllowsOnlyOneActiveCvRowPerStudent() {
-        insertStudent(studentOne, "81000003", "cv.acceptance.unique@ruh.ac.lk");
+        insertStudent(studentOne, "SC/2026/81003", "cv.acceptance.unique@ruh.ac.lk");
         jdbc.update("INSERT INTO cvs (id, student_id, revision) VALUES (?, ?, 1)", UUID.randomUUID(), studentOne);
 
         assertThatThrownBy(() -> jdbc.update(

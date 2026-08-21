@@ -3,13 +3,14 @@ package lk.ac.ruhuna.dcs.cvmanagement.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
-import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.jdbc.DataSourceBuilder;
@@ -31,11 +32,12 @@ class FlywayMigrationTest {
                     .withUsername("cv_user")
                     .withPassword("cv_local_password");
 
-    private DataSource dataSource;
+    private HikariDataSource dataSource;
 
     @BeforeEach
     void resetDatabase() throws SQLException {
         dataSource = DataSourceBuilder.create()
+                .type(HikariDataSource.class)
                 .url(POSTGRES.getJdbcUrl())
                 .username(POSTGRES.getUsername())
                 .password(POSTGRES.getPassword())
@@ -48,6 +50,13 @@ class FlywayMigrationTest {
             statement.execute("DROP SCHEMA IF EXISTS system CASCADE");
             statement.execute("DROP SCHEMA public CASCADE");
             statement.execute("CREATE SCHEMA public");
+        }
+    }
+
+    @AfterEach
+    void closeDataSource() {
+        if (dataSource != null) {
+            dataSource.close();
         }
     }
 
