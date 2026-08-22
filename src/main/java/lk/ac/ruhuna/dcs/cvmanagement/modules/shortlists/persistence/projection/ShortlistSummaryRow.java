@@ -1,20 +1,22 @@
-package lk.ac.ruhuna.dcs.cvmanagement.modules.shortlists.api.dto.response;
+package lk.ac.ruhuna.dcs.cvmanagement.modules.shortlists.persistence.projection;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.shortlists.domain.policy.ShortlistStatus;
 
-/** Public shortlist summary contract. */
-public record ShortlistResponse(
+/** One bounded shortlist list/detail summary row. */
+public record ShortlistSummaryRow(
         UUID shortlistId,
-        InternshipRequestSummaryResponse request,
+        UUID requestId,
+        UUID companyId,
+        String companyName,
+        String roleTitle,
+        Integer requestGuidanceValue,
         UUID filterRunId,
         String name,
         ShortlistStatus status,
         Integer guidanceValue,
         long selectedCandidateCount,
-        boolean guidanceExceeded,
-        String guidanceWarning,
         long version,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
