@@ -32,6 +32,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.shared.error.GlobalExceptionHandler;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ProblemDetailsFactory;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PageMetadata;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileResolver;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
@@ -133,6 +134,55 @@ class AdminStudentControllerTest {
         verify(inspectionService).getAcademicRecords(
                 studentId,
                 new AdminAcademicRecordCriteria(0, 5, "academicYear,desc", "web", "CSC3112"));
+    }
+
+    @Test
+    void delegatesLatestCvMetadataWithoutCreatingFallbackState() {
+        RegisteredStudentQueryService rosterService = mock(RegisteredStudentQueryService.class);
+        AdminStudentInspectionService inspectionService = mock(AdminStudentInspectionService.class);
+        AdminStudentController controller = new AdminStudentController(rosterService, inspectionService);
+        UUID studentId = UUID.randomUUID();
+        UUID cvId = UUID.randomUUID();
+        OffsetDateTime generatedAt = OffsetDateTime.parse("2026-08-20T08:00:00Z");
+        var expected = AdminLatestCvResponse.available(
+                cvId,
+                2,
+                generatedAt,
+                generatedAt.plusMinutes(1),
+                lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.model.CvFreshnessStatus.CURRENT,
+                "cv-" + studentId + ".pdf",
+                25,
+                studentId);
+        when(inspectionService.getLatestCv(studentId)).thenReturn(expected);
+
+        assertThat(controller.getLatestCv(studentId)).isSameAs(expected);
+        verify(inspectionService).getLatestCv(studentId);
+    }
+
+    @Test
+    void returnsTheResolvedPdfWithSecureDownloadHeaders() {
+        RegisteredStudentQueryService rosterService = mock(RegisteredStudentQueryService.class);
+        AdminStudentInspectionService inspectionService = mock(AdminStudentInspectionService.class);
+        AdminStudentController controller = new AdminStudentController(rosterService, inspectionService);
+        UUID studentId = UUID.randomUUID();
+        UUID cvId = UUID.randomUUID();
+        byte[] bytes = "%PDF-1.7 admin inspection".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        String fileName = "cv-" + studentId + ".pdf";
+        when(inspectionService.downloadLatestCv(studentId)).thenReturn(
+                new ActiveCvFileResolver.ResolvedCvFile(cvId, 2, fileName, bytes.length, bytes));
+
+        var response = controller.downloadLatestCv(studentId);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PDF);
+        assertThat(response.getHeaders().getContentDisposition().getType()).isEqualTo("attachment");
+        assertThat(response.getHeaders().getContentDisposition().getFilename()).isEqualTo(fileName);
+        assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
+        assertThat(response.getHeaders().getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
+        assertThat(response.getHeaders().getContentLength()).isEqualTo(bytes.length);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getByteArray()).containsExactly(bytes);
+        verify(inspectionService).downloadLatestCv(studentId);
     }
 
     @Test
