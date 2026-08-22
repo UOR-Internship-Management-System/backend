@@ -23,7 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    private static final int LATEST_MIGRATION_COUNT = 52;
+    private static final int LATEST_MIGRATION_COUNT = 54;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =

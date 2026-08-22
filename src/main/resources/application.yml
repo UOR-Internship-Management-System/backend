@@ -81,6 +81,14 @@ app:
       timeout: ${CV_LATEX_TIMEOUT:PT10S}
       max-output-bytes: ${CV_PDF_MAX_BYTES:5242880}
       max-concurrent-generations: ${CV_PDF_MAX_CONCURRENT:2}
+  exports:
+    storage:
+      root: ${EXPORT_STORAGE_ROOT:./data/exports}
+    processing:
+      worker-enabled: ${EXPORT_WORKER_ENABLED:true}
+      worker-poll-delay-ms: ${EXPORT_WORKER_POLL_DELAY_MS:2000}
+      max-jobs-per-poll: ${EXPORT_MAX_JOBS_PER_POLL:2}
+      retention: ${EXPORT_RETENTION:P7D}
   security:
     jwt:
       issuer: ${JWT_ISSUER:cv-management}

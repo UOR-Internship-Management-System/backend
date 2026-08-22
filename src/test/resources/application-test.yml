@@ -18,6 +18,9 @@ app:
     ledger:
       processing:
         worker-enabled: false
+  exports:
+    processing:
+      worker-enabled: false
   security:
     jwt:
       issuer: cv-management-test
