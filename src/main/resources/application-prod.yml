@@ -36,6 +36,8 @@ app:
   email:
       mode: smtp
       from: ${APP_EMAIL_FROM}
+  files:
+    public-base-url: ${PUBLIC_BASE_URL}
 
 management:
   endpoint:

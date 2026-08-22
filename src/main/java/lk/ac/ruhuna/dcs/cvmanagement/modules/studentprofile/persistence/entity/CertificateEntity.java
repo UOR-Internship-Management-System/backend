@@ -46,4 +46,7 @@ public class CertificateEntity {
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
+
+    @Column(name = "evidence_file_id")
+    private UUID evidenceFileId;
 }
