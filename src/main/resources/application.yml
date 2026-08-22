@@ -45,6 +45,12 @@ management:
       enabled: true
 
 app:
+  email:
+    # 'log' writes OTPs to the application log (development only).
+    # 'smtp' sends real mail and requires spring.mail.* below.
+    mode: ${APP_EMAIL_MODE:log}
+    from: ${APP_EMAIL_FROM:no-reply@cvmanagement.local}
+
   auth:
     otp:
       length: ${APP_AUTH_OTP_LENGTH:6}

@@ -10,6 +10,22 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  mail:
+    host: ${SMTP_HOST}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
 app:
   security:
     jwt:
@@ -17,6 +33,9 @@ app:
       secret: ${JWT_SECRET}
     cors:
       allowed-origins: ${FRONTEND_ORIGIN}
+  email:
+      mode: smtp
+      from: ${APP_EMAIL_FROM}
 
 management:
   endpoint:
