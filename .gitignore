@@ -39,3 +39,7 @@ postman/admin-student-inspection/*.local.postman_environment.json
 postman/admin-student-inspection/reports/
 postman/shortlist-management/*.local.postman_environment.json
 postman/shortlist-management/reports/
+postman/candidate-filtering/*.local.postman_environment.json
+postman/candidate-filtering/reports/
+postman/candidate-filtering/*.local.postman_environment.json
+postman/candidate-filtering/reports/
