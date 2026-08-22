@@ -38,6 +38,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.repository.Fi
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.BadRequestException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.UnauthorizedException;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.filtering.CandidateEnrichmentQuery;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.RoleName;
@@ -54,6 +55,7 @@ class CandidateFilteringQueryServiceTest {
     private final CandidateFilteringReadRepository readRepository = mock(CandidateFilteringReadRepository.class);
     private final CurrentActorProvider actorProvider = mock(CurrentActorProvider.class);
     private final CandidateFilteringMetrics metrics = mock(CandidateFilteringMetrics.class);
+    private final CandidateEnrichmentQuery enrichmentQuery = mock(CandidateEnrichmentQuery.class);
     private final CandidateFilteringDependencyExecutor dependencyExecutor =
             new CandidateFilteringDependencyExecutor(metrics);
     private final CandidateFilteringMapper mapper = new CandidateFilteringMapper();
@@ -84,7 +86,8 @@ class CandidateFilteringQueryServiceTest {
                 mapper,
                 actorProvider,
                 dependencyExecutor,
-                metrics);
+                metrics,
+                enrichmentQuery);
     }
 
     @Test
@@ -149,19 +152,23 @@ class CandidateFilteringQueryServiceTest {
     }
 
     @Test
-    void publicCandidateContractFailsClosedUntilAuthoritativeEnrichmentExists() {
-        assertThatThrownBy(() -> service.listCandidates(runId, 0, 20, null, "officialGpa,desc"))
-                .isInstanceOf(FilterDependencyUnavailableException.class)
-                .hasMessageContaining("CV")
-                .hasMessageContaining("shortlist")
-                .hasMessageContaining("authoritative persistence");
+    void publicCandidateContractUsesAuthoritativeCvAndShortlistEnrichment() {
+        CandidateFilterRow row = new CandidateFilterRow(
+                studentA, "SC/2022/10001", "Alpha Student", new BigDecimal("3.50"), 3);
+        when(readRepository.searchCandidates(any(), eq(null), eq(0), eq(20), eq(CandidateSort.OFFICIAL_GPA_DESC)))
+                .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1));
+        when(readRepository.findMatchingDeclaredSkills(List.of(studentA), List.of(requestSkill, additionalSkill)))
+                .thenReturn(List.of());
+        when(enrichmentQuery.findAll(Set.of(studentA))).thenReturn(java.util.Map.of(
+                studentA, new CandidateEnrichmentQuery.CandidateEnrichment(true, 2)));
 
-        verify(readRepository, never()).searchCandidates(
-                any(),
-                any(),
-                org.mockito.ArgumentMatchers.anyInt(),
-                org.mockito.ArgumentMatchers.anyInt(),
-                any());
+        var page = service.listCandidates(runId, 0, 20, null, "officialGpa,desc");
+
+        assertThat(page.items()).singleElement().satisfies(candidate -> {
+            assertThat(candidate.hasLatestSavedCv()).isTrue();
+            assertThat(candidate.hasExistingActiveShortlist()).isTrue();
+            assertThat(candidate.existingActiveShortlistCount()).isEqualTo(2);
+        });
     }
 
     @Test

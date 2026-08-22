@@ -5,12 +5,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.api.dto.response.CandidateFilteringCandidateResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.api.dto.response.CandidateFilteringRunResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.application.model.CandidateFilteringCandidateCore;
-import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.exception.FilterDependencyUnavailableException;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.exception.FilterRunNotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.CandidateFilteringCriteria;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.domain.policy.CandidateSort;
@@ -28,6 +28,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.shared.error.BadRequestException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.UnauthorizedException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.filtering.CandidateEnrichmentQuery;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
@@ -56,6 +57,7 @@ public class CandidateFilteringQueryService {
     private final CurrentActorProvider currentActorProvider;
     private final CandidateFilteringDependencyExecutor dependencyExecutor;
     private final CandidateFilteringMetrics metrics;
+    private final CandidateEnrichmentQuery enrichmentQuery;
 
     public CandidateFilteringQueryService(
             FilterRunRepository runRepository,
@@ -64,7 +66,8 @@ public class CandidateFilteringQueryService {
             CandidateFilteringMapper mapper,
             CurrentActorProvider currentActorProvider,
             CandidateFilteringDependencyExecutor dependencyExecutor,
-            CandidateFilteringMetrics metrics) {
+            CandidateFilteringMetrics metrics,
+            CandidateEnrichmentQuery enrichmentQuery) {
         this.runRepository = runRepository;
         this.runSkillRepository = runSkillRepository;
         this.readRepository = readRepository;
@@ -72,6 +75,7 @@ public class CandidateFilteringQueryService {
         this.currentActorProvider = currentActorProvider;
         this.dependencyExecutor = dependencyExecutor;
         this.metrics = metrics;
+        this.enrichmentQuery = enrichmentQuery;
     }
 
     /** Returns persisted run criteria together with a candidate count recomputed from current data. */
@@ -104,15 +108,7 @@ public class CandidateFilteringQueryService {
         return mapper.toRunResponse(loadedRun.entity(), requestSummary, loadedRun.criteria(), candidateCount);
     }
 
-    /**
-     * Public candidate-list contract.
-     *
-     * <p>The deterministic core result is already implemented, but the current OpenAPI response also
-     * requires latest-saved-CV and cross-shortlist facts. Those facts have no authoritative
-     * persistence in the current backend. The endpoint therefore fails closed instead of inventing
-     * values. A factual downstream enrichment implementation can replace this gate while preserving
-     * the method and HTTP contract.
-     */
+    /** Returns a deterministic candidate page enriched with authoritative CV and shortlist facts. */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PagedResponse<CandidateFilteringCandidateResponse> listCandidates(
             UUID filterRunId,
@@ -120,26 +116,34 @@ public class CandidateFilteringQueryService {
             Integer size,
             String search,
             String sort) {
-        // Validate authorization, paging/search/sort, and the referenced run before reporting the
-        // downstream contract dependency. This preserves stable 400/401/403/404 semantics.
-        currentAdmin();
-        int safePage = validatePage(page);
-        int safeSize = validateSize(size);
-        validateOffset(safePage, safeSize);
-        validateSearch(search);
-        CandidateSort.fromApiValue(sort);
-        loadRun(filterRunId);
-
-        throw new FilterDependencyUnavailableException(
-                "Candidate CV and shortlist enrichment data is not available from authoritative persistence.");
+        PagedResponse<CandidateFilteringCandidateCore> core =
+                listCandidateCore(filterRunId, page, size, search, sort);
+        Set<UUID> studentIds = core.items().stream()
+                .map(CandidateFilteringCandidateCore::studentId)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        Map<UUID, CandidateEnrichmentQuery.CandidateEnrichment> enrichment =
+                enrichmentQuery.findAll(studentIds);
+        List<CandidateFilteringCandidateResponse> items = core.items().stream()
+                .map(candidate -> {
+                    CandidateEnrichmentQuery.CandidateEnrichment facts = enrichment.getOrDefault(
+                            candidate.studentId(),
+                            new CandidateEnrichmentQuery.CandidateEnrichment(false, 0));
+                    return new CandidateFilteringCandidateResponse(
+                            candidate.studentId(), candidate.indexNumber(), candidate.fullName(),
+                            candidate.officialGpa(), candidate.gpaAvailabilityStatus(),
+                            candidate.matchingDeclaredSkills(), candidate.declaredSkillCount(),
+                            facts.hasLatestSavedCv(), facts.hasExistingActiveShortlist(),
+                            facts.existingActiveShortlistCount());
+                })
+                .toList();
+        return new PagedResponse<>(items, core.page());
     }
 
     /**
      * Returns the authoritative BMD-010 portion of a candidate page.
      *
-     * <p>This method intentionally returns a core application model rather than the final public
-     * candidate DTO because CV and cross-shortlist enrichment have no authoritative persistence yet.
-     * Patch 6 can enrich this core model without changing the deterministic filtering query.
+     * <p>This method intentionally returns the filtering-owned core model so downstream enrichment
+     * remains isolated behind {@link CandidateEnrichmentQuery}.
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PagedResponse<CandidateFilteringCandidateCore> listCandidateCore(
