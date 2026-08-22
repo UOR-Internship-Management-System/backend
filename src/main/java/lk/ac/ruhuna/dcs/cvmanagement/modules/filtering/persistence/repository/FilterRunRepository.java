@@ -1,8 +1,9 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.repository;
 
-/**
- * Spring Data repository for C: persistence.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public interface FilterRunRepository {
+import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.filtering.persistence.entity.FilterRunEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+/** Persistence boundary for immutable Candidate Filtering run metadata. */
+public interface FilterRunRepository extends JpaRepository<FilterRunEntity, UUID> {
 }
