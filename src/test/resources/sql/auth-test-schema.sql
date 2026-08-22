@@ -72,6 +72,8 @@ CREATE TABLE audit_events (
     actor_role VARCHAR(50),
     event_type VARCHAR(100) NOT NULL,
     event_category VARCHAR(50) NOT NULL,
+    outcome VARCHAR(32) NOT NULL DEFAULT 'SUCCEEDED',
+    severity VARCHAR(32),
     resource_type VARCHAR(100),
     resource_id VARCHAR(100),
     metadata VARCHAR(2000),

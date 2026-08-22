@@ -83,6 +83,74 @@ public class AuditEventPublisher {
         }
     }
 
+    public void recordSecurityRequired(
+            UUID actorUserId,
+            String actorRole,
+            AuditEventType eventType,
+            AuditEventOutcome outcome,
+            AuditEventSeverity severity,
+            String resourceType,
+            String resourceId,
+            Map<String, ?> metadata) {
+        persist(
+                actorUserId,
+                actorRole,
+                eventType.name(),
+                AuditEventCategory.SECURITY,
+                outcome,
+                severity,
+                resourceType,
+                resourceId,
+                metadata);
+    }
+
+    public void recordSecurityBestEffort(
+            UUID actorUserId,
+            String actorRole,
+            AuditEventType eventType,
+            AuditEventOutcome outcome,
+            AuditEventSeverity severity,
+            String resourceType,
+            String resourceId,
+            Map<String, ?> metadata) {
+        try {
+            recordSecurityRequired(
+                    actorUserId,
+                    actorRole,
+                    eventType,
+                    outcome,
+                    severity,
+                    resourceType,
+                    resourceId,
+                    metadata);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("Audit event could not be persisted: {}", eventType.name());
+        }
+    }
+
+    private void persist(
+            UUID actorUserId,
+            String actorRole,
+            String eventType,
+            AuditEventCategory category,
+            AuditEventOutcome outcome,
+            AuditEventSeverity severity,
+            String resourceType,
+            String resourceId,
+            Map<String, ?> metadata) {
+        auditEventSink.persist(new AuditEvent(
+                actorUserId,
+                actorRole,
+                eventType,
+                category,
+                outcome,
+                severity,
+                resourceType,
+                resourceId,
+                metadata == null ? Map.of() : metadata,
+                CorrelationIdContext.current().orElse(null)));
+    }
+
     private AuditEventOutcome outcomeFor(String eventType) {
         String normalized = eventType == null ? "" : eventType.toUpperCase(java.util.Locale.ROOT);
         if (normalized.contains("FAILED") || normalized.contains("FAILURE") || normalized.contains("UNAVAILABLE")) {
