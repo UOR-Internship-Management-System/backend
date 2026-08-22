@@ -1,0 +1,56 @@
+{
+  "info": {
+    "name": "BMD-012 Audit Logging and System Events Acceptance",
+    "description": "Exercises public security workflows. Run AUDIT_VERIFICATION.sql afterward because BMD-012 Version 1 intentionally has no audit-event HTTP viewer.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health is available",
+      "request": {"method": "GET", "url": "{{baseUrl}}/health"},
+      "event": [{"listen": "test", "script": {"exec": ["pm.test('health is 200', () => pm.response.to.have.status(200));"]}}]
+    },
+    {
+      "name": "Failed Admin login is rejected and audited",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\"email\":\"{{adminEmail}}\",\"password\":\"deliberately-wrong-password\"}"},
+        "url": "{{baseUrl}}/auth/admin/login"
+      },
+      "event": [{"listen": "test", "script": {"exec": ["pm.test('invalid login is unauthorized', () => pm.response.to.have.status(401));"]}}]
+    },
+    {
+      "name": "Admin login succeeds and is audited",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"mode": "raw", "raw": "{\"email\":\"{{adminEmail}}\",\"password\":\"{{adminPassword}}\"}"},
+        "url": "{{baseUrl}}/auth/admin/login"
+      },
+      "event": [{"listen": "test", "script": {"exec": [
+        "pm.test('admin login is 200', () => pm.response.to.have.status(200));",
+        "if (pm.response.code === 200) { const body = pm.response.json(); pm.environment.set('accessToken', body.accessToken); }",
+        "pm.test('token is present', () => pm.expect(pm.environment.get('accessToken')).to.be.a('string').and.not.empty);"
+      ]}}]
+    },
+    {
+      "name": "Authenticated identity is available",
+      "request": {
+        "method": "GET",
+        "header": [{"key": "Authorization", "value": "Bearer {{accessToken}}"}],
+        "url": "{{baseUrl}}/auth/me"
+      },
+      "event": [{"listen": "test", "script": {"exec": ["pm.test('identity is 200', () => pm.response.to.have.status(200));"]}}]
+    },
+    {
+      "name": "Admin logout succeeds and is audited",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Authorization", "value": "Bearer {{accessToken}}"}],
+        "url": "{{baseUrl}}/auth/logout"
+      },
+      "event": [{"listen": "test", "script": {"exec": ["pm.test('logout is successful', () => pm.expect(pm.response.code).to.be.oneOf([200, 204]));"]}}]
+    }
+  ]
+}

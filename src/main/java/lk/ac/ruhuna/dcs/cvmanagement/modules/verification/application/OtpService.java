@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.email.OtpEmailSender;
@@ -17,6 +18,9 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.domain.policy.OtpPurpo
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.domain.policy.OtpRateLimitPolicy;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.domain.policy.OtpStatus;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventOutcome;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventSeverity;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.BadRequestException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.AccountType;
@@ -62,7 +66,7 @@ public class OtpService {
         return createContext(OtpPurpose.PASSWORD_RESET, accountType, userAccountId, null, "PASSWORD_RESET", email);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BadRequestException.class)
     public OtpVerifyResponse verify(UUID contextId, OtpPurpose expectedPurpose, String otp) {
         OtpContext context = findRequired(contextId, expectedPurpose);
         Instant now = Instant.now(clock);
@@ -76,12 +80,18 @@ public class OtpService {
                     status.name(),
                     Timestamp.from(now),
                     context.id());
-            auditEventPublisher.record(
+            AuditEventType eventType = status == OtpStatus.BLOCKED
+                    ? AuditEventType.AUTH_OTP_MAX_ATTEMPTS_REACHED
+                    : AuditEventType.AUTH_OTP_VERIFICATION_FAILED;
+            auditEventPublisher.recordSecurityRequired(
                     context.userAccountId(),
                     context.accountType() == null ? null : context.accountType().name(),
-                    "AUTH_OTP_FAILED",
+                    eventType,
+                    AuditEventOutcome.FAILED,
+                    status == OtpStatus.BLOCKED ? AuditEventSeverity.HIGH : AuditEventSeverity.WARN,
                     "verification_session",
-                    context.id().toString());
+                    context.id().toString(),
+                    Map.of("purpose", context.purpose().name()));
             throw new BadRequestException("The OTP is invalid or expired.");
         }
         jdbcTemplate.update(
@@ -89,16 +99,19 @@ public class OtpService {
                 Timestamp.from(now),
                 Timestamp.from(now),
                 context.id());
-        auditEventPublisher.record(
+        auditEventPublisher.recordSecurityRequired(
                 context.userAccountId(),
                 context.accountType() == null ? null : context.accountType().name(),
-                "AUTH_OTP_VERIFIED",
+                AuditEventType.AUTH_OTP_VERIFIED,
+                AuditEventOutcome.SUCCEEDED,
+                AuditEventSeverity.INFO,
                 "verification_session",
-                context.id().toString());
+                context.id().toString(),
+                Map.of("purpose", context.purpose().name()));
         return new OtpVerifyResponse(true);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = BadRequestException.class)
     public OtpResendResponse resend(UUID contextId, OtpPurpose expectedPurpose) {
         OtpContext context = findRequired(contextId, expectedPurpose);
         Instant now = Instant.now(clock);
@@ -115,6 +128,15 @@ public class OtpService {
                     "UPDATE verification_sessions SET status = 'BLOCKED', updated_at = ? WHERE id = ?",
                     Timestamp.from(now),
                     context.id());
+            auditEventPublisher.recordSecurityRequired(
+                    context.userAccountId(),
+                    context.accountType() == null ? null : context.accountType().name(),
+                    AuditEventType.AUTH_OTP_RESEND_LIMIT_REACHED,
+                    AuditEventOutcome.DENIED,
+                    AuditEventSeverity.HIGH,
+                    "verification_session",
+                    context.id().toString(),
+                    Map.of("purpose", context.purpose().name()));
             throw new BadRequestException("OTP resend limit exceeded.");
         }
         String otp = generateOtp();
@@ -133,6 +155,15 @@ public class OtpService {
                 Timestamp.from(now),
                 context.id());
         otpEmailSender.sendOtp(context.email(), expectedPurpose.name(), otp, expiresAt);
+        auditEventPublisher.recordSecurityBestEffort(
+                context.userAccountId(),
+                context.accountType() == null ? null : context.accountType().name(),
+                AuditEventType.AUTH_OTP_SENT,
+                AuditEventOutcome.ATTEMPTED,
+                AuditEventSeverity.INFO,
+                "verification_session",
+                context.id().toString(),
+                Map.of("purpose", expectedPurpose.name(), "delivery", "RESEND"));
         return new OtpResendResponse("OTP resent successfully.", policy.ttl().toSeconds());
     }
 
@@ -197,6 +228,15 @@ public class OtpService {
                 Timestamp.from(now),
                 Timestamp.from(now));
         otpEmailSender.sendOtp(email, purpose.name(), otp, expiresAt);
+        auditEventPublisher.recordSecurityBestEffort(
+                userAccountId,
+                accountType == null ? null : accountType.name(),
+                AuditEventType.AUTH_OTP_SENT,
+                AuditEventOutcome.ATTEMPTED,
+                AuditEventSeverity.INFO,
+                "verification_session",
+                id.toString(),
+                Map.of("purpose", purpose.name(), "delivery", "INITIAL"));
         return new OtpCreateResult(id, expiresAt, policy.ttl());
     }
 
@@ -209,6 +249,15 @@ public class OtpService {
                     "UPDATE verification_sessions SET status = 'BLOCKED', updated_at = ? WHERE id = ?",
                     Timestamp.from(now),
                     context.id());
+            auditEventPublisher.recordSecurityRequired(
+                    context.userAccountId(),
+                    context.accountType() == null ? null : context.accountType().name(),
+                    AuditEventType.AUTH_OTP_MAX_ATTEMPTS_REACHED,
+                    AuditEventOutcome.DENIED,
+                    AuditEventSeverity.HIGH,
+                    "verification_session",
+                    context.id().toString(),
+                    Map.of("purpose", context.purpose().name()));
             throw new BadRequestException("OTP attempt limit exceeded.");
         }
         if (!now.isBefore(context.expiresAt())) {

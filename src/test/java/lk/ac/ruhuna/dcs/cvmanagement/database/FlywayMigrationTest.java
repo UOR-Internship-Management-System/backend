@@ -23,7 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    private static final int LATEST_MIGRATION_COUNT = 54;
+    private static final int LATEST_MIGRATION_COUNT = 55;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -99,6 +99,9 @@ class FlywayMigrationTest {
         assertThat(columnExists("public", "candidate_filter_runs", "metadata")).isFalse();
         assertThat(tableExists("public", "shortlists")).isTrue();
         assertThat(tableExists("public", "shortlist_candidates")).isTrue();
+        assertThat(tableExists("public", "audit_events")).isTrue();
+        assertThat(columnExists("public", "audit_events", "outcome")).isTrue();
+        assertThat(columnExists("public", "audit_events", "severity")).isTrue();
         assertThat(columnExists("public", "shortlists", "version")).isTrue();
         assertThat(columnExists("public", "shortlists", "guidance_value_snapshot")).isTrue();
         assertThat(columnExists("public", "companies", "active")).isFalse();
@@ -146,6 +149,23 @@ class FlywayMigrationTest {
                                 + "WHERE course_code IN ('CSC3133', 'CSC3152', 'CSC3162', 'CSC4282')",
                         Integer.class))
                 .isEqualTo(4);
+
+        jdbc.update("""
+                INSERT INTO public.audit_events (
+                    event_type, event_category, outcome, severity, metadata
+                ) VALUES ('AUTH_LOGIN_FAILED', 'SECURITY', 'FAILED', 'WARN', '{}'::jsonb)
+                """);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM public.audit_events "
+                                + "WHERE event_type = 'AUTH_LOGIN_FAILED' AND outcome = 'FAILED' AND severity = 'WARN'",
+                        Integer.class))
+                .isEqualTo(1);
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO public.audit_events (
+                    event_type, event_category, outcome, severity, metadata
+                ) VALUES ('INVALID_METADATA', 'SECURITY', 'ATTEMPTED', 'INFO', '[]'::jsonb)
+                """))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

@@ -17,6 +17,9 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.auth.api.dto.request.StudentLoginRe
 import lk.ac.ruhuna.dcs.cvmanagement.modules.auth.api.dto.response.AuthTokenResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.auth.api.dto.response.CurrentUserResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventOutcome;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventSeverity;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.UnauthorizedException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.AccountType;
@@ -77,12 +80,15 @@ public class AuthService {
     }
 
     public void logout() {
-        currentActorProvider.currentActor().ifPresent(actor -> auditEventPublisher.record(
+        currentActorProvider.currentActor().ifPresent(actor -> auditEventPublisher.recordSecurityBestEffort(
                 actor.userId(),
                 actor.roles().stream().findFirst().map(Enum::name).orElse(null),
-                "AUTH_LOGOUT",
+                AuditEventType.AUTH_LOGOUT_SUCCEEDED,
+                AuditEventOutcome.SUCCEEDED,
+                AuditEventSeverity.INFO,
                 "user_account",
-                actor.userId().toString()));
+                actor.userId().toString(),
+                java.util.Map.of()));
     }
 
     public Optional<AccountRecord> findResetEligible(AccountType accountType, String email) {
@@ -124,12 +130,15 @@ public class AuthService {
                 || !account.get().roles().contains(requiredRole)
                 || (requiredRole == RoleName.ADMIN && !isActiveAdmin(account.get().id()))
                 || !passwordHashService.matches(password, account.get().passwordHash())) {
-            auditEventPublisher.record(
+            auditEventPublisher.recordSecurityBestEffort(
                     account.map(AccountRecord::id).orElse(null),
                     requiredRole.name(),
-                    "AUTH_LOGIN_FAILURE",
+                    AuditEventType.AUTH_LOGIN_FAILED,
+                    AuditEventOutcome.FAILED,
+                    AuditEventSeverity.WARN,
                     "user_account",
-                    account.map(AccountRecord::id).map(UUID::toString).orElse(null));
+                    account.map(AccountRecord::id).map(UUID::toString).orElse(null),
+                    java.util.Map.of("accountType", requiredRole.name()));
             throw new UnauthorizedException("Invalid email or password.");
         }
         Instant now = Instant.now(clock);
@@ -138,12 +147,17 @@ public class AuthService {
                 Timestamp.from(now),
                 Timestamp.from(now),
                 account.get().id());
-        auditEventPublisher.record(
+        auditEventPublisher.recordSecurityRequired(
                 account.get().id(),
                 requiredRole.name(),
-                requiredRole == RoleName.ADMIN ? "AUTH_ADMIN_LOGIN_SUCCESS" : "AUTH_STUDENT_LOGIN_SUCCESS",
+                requiredRole == RoleName.ADMIN
+                        ? AuditEventType.AUTH_ADMIN_LOGIN_SUCCEEDED
+                        : AuditEventType.AUTH_STUDENT_LOGIN_SUCCEEDED,
+                AuditEventOutcome.SUCCEEDED,
+                AuditEventSeverity.INFO,
                 "user_account",
-                account.get().id().toString());
+                account.get().id().toString(),
+                java.util.Map.of("accountType", requiredRole.name()));
         return tokenResponse(account.get());
     }
 
