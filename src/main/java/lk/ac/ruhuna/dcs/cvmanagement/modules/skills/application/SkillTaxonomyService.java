@@ -65,7 +65,7 @@ public class SkillTaxonomyService {
     }
 
     public PagedResponse<SkillClusterResponse> listClusters(Integer page, Integer size, String sort) {
-        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        Pageable pageable = PageRequestFactory.build(page, size, sort, Map.of("name", "clusterName"));
         Page<SkillCoreClusterEntity> result = clusterRepository.findByActiveTrue(pageable);
         return PagedResponse.of(
             result.map(c -> new SkillClusterResponse(c.getId(), c.getClusterName(), c.getDescription(), null)),
@@ -73,7 +73,7 @@ public class SkillTaxonomyService {
     }
 
     public PagedResponse<SkillCategoryResponse> listCategories(UUID clusterId, Integer page, Integer size, String sort) {
-        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        Pageable pageable = PageRequestFactory.build(page, size, sort, Map.of("name", "categoryName"));
         Page<SkillCategoryEntity> result = categoryRepository.search(clusterId, pageable);
         return PagedResponse.of(
             result.map(c -> new SkillCategoryResponse(c.getId(), c.getCategoryName(), c.getDescription(), null)),
