@@ -65,6 +65,35 @@ class SecuritySmokeTest {
     }
 
     @Test
+    void candidateFilteringAdminRoutesRequireAuthentication() throws Exception {
+        String runId = "95000000-0000-4000-8000-000000000003";
+
+        mockMvc.perform(get("/api/v1/admin/candidate-filtering/runs/{filterRunId}", runId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/candidate-filtering/runs/{filterRunId}/candidates", runId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/admin/candidate-filtering/runs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    void studentRoleCannotAccessCandidateFilteringAdminRoutes() throws Exception {
+        String runId = "95000000-0000-4000-8000-000000000003";
+
+        mockMvc.perform(get("/api/v1/admin/candidate-filtering/runs/{filterRunId}", runId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/candidate-filtering/runs/{filterRunId}/candidates", runId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/candidate-filtering/runs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void studentProjectRoutesRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/me/projects"))
                 .andExpect(status().isUnauthorized());

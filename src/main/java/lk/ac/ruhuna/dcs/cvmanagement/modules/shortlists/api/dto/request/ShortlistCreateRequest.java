@@ -1,8 +1,12 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.shortlists.api.dto.request;
 
-/**
- * Reserved API request DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class ShortlistCreateRequest {
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import java.util.UUID;
+
+/** Creates the single draft shortlist for an Internship Request. */
+public record ShortlistCreateRequest(
+        @NotNull UUID requestId,
+        UUID filterRunId,
+        @Size(max = 200) String name) {
 }

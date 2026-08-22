@@ -37,3 +37,5 @@ postman/cv-generation/*.local.postman_environment.json
 postman/cv-generation/reports/
 postman/admin-student-inspection/*.local.postman_environment.json
 postman/admin-student-inspection/reports/
+postman/shortlist-management/*.local.postman_environment.json
+postman/shortlist-management/reports/

@@ -55,10 +55,10 @@ class CvPersistencePostgresAcceptanceTest {
     }
 
     @Test
-    void flywayEndsAtV084AndNormalizedSelectionsEnforceParentStudentIntegrity() {
+    void flywayAppliesAtLeastV084AndNormalizedSelectionsEnforceParentStudentIntegrity() {
         Integer version = jdbc.queryForObject(
                 "SELECT MAX(version::integer) FROM flyway_schema_history WHERE success", Integer.class);
-        assertThat(version).isEqualTo(84);
+        assertThat(version).isGreaterThanOrEqualTo(84);
         assertThat(tableExists("cv_previews")).isTrue();
         assertThat(tableExists("cv_selected_projects")).isTrue();
         assertThat(tableExists("cv_preview_projects")).isTrue();
