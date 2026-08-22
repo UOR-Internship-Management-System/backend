@@ -2,8 +2,8 @@
 
 ## Automated backend verification
 
-- Focused audit/authentication tests: pending final recorded run
-- Complete Maven suite: pending final recorded run
+- Focused audit/authentication/metrics/architecture tests: `18` run, `0` failures, `0` errors
+- Complete Maven suite: `366` run, `0` failures, `0` errors, `60` skipped
 - PostgreSQL/Testcontainers audit checks: pending Docker-capable CI
 
 ## Newman acceptance
