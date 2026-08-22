@@ -197,7 +197,7 @@ class ModuleDependencyRulesTest {
 
         Set<String> activeModules = Set.of(
                 "health", "auth", "verification", "studentprofile", "admindashboard", "skills", "academics",
-                "adminstudents", "companies", "internships", "projects", "cv", "filtering");
+                "adminstudents", "companies", "internships", "projects", "cv", "filtering", "shortlists");
 
         for (String moduleName : MODULE_NAMES) {
             if (activeModules.contains(moduleName)) {
