@@ -25,7 +25,7 @@ The canonical OpenAPI contract also places shortlist summary export and bulk lat
 
 The current backend has only empty Shortlists scaffolding and no shortlist tables. The current frontend already contains strict shortlist/export transport schemas, API wrappers, TanStack Query hooks, mocks, a Candidate Filtering handoff and finalized-shortlist screens. It still needs real-backend verification and a deliberate decision about whether draft review/removal/finalization remains in Candidate Filtering or is also exposed on the Shortlists page.
 
-At the time of this audit, the latest migration on `origin/develop` is `V084`. The expected first BMD-011 migration is therefore `V085`, but the implementation branch must re-check after updating from `origin/develop`. Never reuse a migration version that exists in the final branch baseline.
+At the time of this audit, `origin/develop` ended at `V084`. Integrating the unmerged Candidate Filtering prerequisite consumes `V085` and `V086`, so the first BMD-011 migration is `V087`. Never reuse a migration version that exists in the final branch baseline.
 
 ## 2. Audited sources and authority
 
@@ -147,7 +147,7 @@ Summary export is asynchronous CSV. Bulk CV export is an asynchronous ZIP contai
   - JPA `@Version` optimistic locking;
   - bounded pagination helpers.
 - No shortlist or export tables currently exist.
-- Current maximum `origin/develop` migration: `V084`; expected next version: `V085`.
+- Current maximum `origin/develop` migration: `V084`; Candidate Filtering uses `V085`/`V086`; BMD-011 starts at `V087`.
 
 ### 4.2 Frontend
 
@@ -196,7 +196,7 @@ git status --short
 git switch -c feature/shortlist-management
 ```
 
-The working tree must be clean before branching. If the newest migration remains `V084`, begin at `V085`. If another migration has landed, use the next actual version.
+The working tree must be clean before branching. After integrating Candidate Filtering, begin BMD-011 at `V087`. If another migration has landed, use the next actual version.
 
 ### 5.3 Frontend branch
 
@@ -333,18 +333,18 @@ Do not create duplicate `internship.internship_request` or company tables. If th
 
 ### 8.2 Expected migrations
 
-Assuming `V084` remains the latest migration:
+After Candidate Filtering migrations `V085` and `V086`:
 
 ```text
-V085__create_shortlist_tables.sql
-V086__add_shortlist_query_and_concurrency_indexes.sql
+V087__create_shortlist_tables.sql
+V088__add_shortlist_query_and_concurrency_indexes.sql
 ```
 
 For full export closure:
 
 ```text
-V087__create_export_job_tables.sql
-V088__add_export_job_indexes_and_constraints.sql
+V089__create_export_job_tables.sql
+V090__add_export_job_indexes_and_constraints.sql
 ```
 
 The final numbers are assigned only after refreshing the implementation branch.
