@@ -23,7 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationTest {
 
-    private static final int LATEST_MIGRATION_COUNT = 50;
+    private static final int LATEST_MIGRATION_COUNT = 52;
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES =
@@ -97,6 +97,10 @@ class FlywayMigrationTest {
         assertThat(tableExists("public", "candidate_filter_run_candidates")).isFalse();
         assertThat(columnExists("public", "candidate_filter_runs", "result_count")).isFalse();
         assertThat(columnExists("public", "candidate_filter_runs", "metadata")).isFalse();
+        assertThat(tableExists("public", "shortlists")).isTrue();
+        assertThat(tableExists("public", "shortlist_candidates")).isTrue();
+        assertThat(columnExists("public", "shortlists", "version")).isTrue();
+        assertThat(columnExists("public", "shortlists", "guidance_value_snapshot")).isTrue();
         assertThat(columnExists("public", "companies", "active")).isFalse();
         assertThat(columnExists("public", "internship_requests", "status")).isFalse();
         assertThat(columnExists("public", "internship_requests", "minimum_gpa")).isFalse();
