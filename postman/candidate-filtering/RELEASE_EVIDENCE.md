@@ -15,7 +15,8 @@ Do not commit credentials, JWTs, authorization headers, personal Student data or
 ## Backend gates
 
 - [x] Candidate enrichment uses authoritative CV and shortlist persistence
-- [ ] Complete backend suite passes
+- [x] Complete backend suite passes: **356 tests, 0 failures, 0 errors, 60 skipped** (2026-08-22)
+- [x] Focused Candidate Filtering and architecture suite passes: **48 tests, 0 failures, 0 errors**
 - [ ] PostgreSQL/Testcontainers filtering matrix passes
 - [ ] Real PostgreSQL/Flyway startup succeeds
 - [ ] Representative filtering query plans reviewed
