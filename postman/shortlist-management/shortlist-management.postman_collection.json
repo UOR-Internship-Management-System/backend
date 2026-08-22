@@ -1,0 +1,503 @@
+{
+  "info": {
+    "_postman_id": "03c9777e-9335-4898-a990-761303b7c9ba",
+    "name": "BMD-011 Shortlist Management Acceptance",
+    "description": "Real-backend Patch 9 acceptance for shortlist lifecycle and asynchronous CSV/ZIP exports. Local credentials and fixture UUIDs belong only in the ignored environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "adminToken", "value": "" },
+    { "key": "studentToken", "value": "" },
+    { "key": "runId", "value": "" },
+    { "key": "companyId", "value": "" },
+    { "key": "companyEtag", "value": "" },
+    { "key": "requestId", "value": "" },
+    { "key": "requestEtag", "value": "" },
+    { "key": "filterRunId", "value": "" },
+    { "key": "shortlistId", "value": "" },
+    { "key": "shortlistEtag", "value": "" },
+    { "key": "shortlistStaleEtag", "value": "" },
+    { "key": "summaryJobId", "value": "" },
+    { "key": "bulkJobId", "value": "" },
+    { "key": "summaryPollCount", "value": "0" },
+    { "key": "bulkPollCount", "value": "0" }
+    ,{ "key": "request2Id", "value": "" }
+    ,{ "key": "request2Etag", "value": "" }
+    ,{ "key": "shortlist2Id", "value": "" }
+    ,{ "key": "shortlist2Etag", "value": "" }
+    ,{ "key": "zeroCvJobId", "value": "" }
+    ,{ "key": "zeroCvPollCount", "value": "0" }
+  ],
+  "item": [
+    {
+      "name": "00 - Authentication and setup",
+      "item": [
+        {
+          "name": "01 Admin login",
+          "auth": { "type": "noauth" },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{adminEmail}}\",\"password\":\"{{adminPassword}}\"}" },
+            "url": "{{baseUrl}}/auth/admin/login"
+          },
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "pm.collectionVariables.set('runId', `${Date.now()}-${Math.floor(Math.random()*100000)}`);",
+              "['adminToken','studentToken','companyId','requestId','filterRunId','shortlistId','summaryJobId','bulkJobId'].forEach(k => pm.collectionVariables.unset(k));"
+            ] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Admin login returns 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('Admin token and role are present', () => { pm.expect(body.accessToken).to.be.a('string').and.not.empty; pm.expect(body.user.roles).to.include('ADMIN'); });",
+              "pm.collectionVariables.set('adminToken', body.accessToken);"
+            ] } }
+          ]
+        },
+        {
+          "name": "02 Student login",
+          "auth": { "type": "noauth" },
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{studentEmail}}\",\"password\":\"{{studentPassword}}\"}" },
+            "url": "{{baseUrl}}/auth/student/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Student login returns 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json(); pm.collectionVariables.set('studentToken', body.accessToken);",
+            "pm.test('Student token has STUDENT role only', () => { pm.expect(body.user.roles).to.include('STUDENT'); pm.expect(body.user.roles).to.not.include('ADMIN'); });"
+          ] } }]
+        },
+        {
+          "name": "03 Acceptance input preflight",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/shortlists?page=0&size=1" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Admin shortlist preflight returns 200', () => pm.response.to.have.status(200));",
+              "['activeSkillId','candidateWithSavedCvId','candidateWithoutSavedCvId'].forEach(k => pm.test(`${k} is configured as UUID`, () => pm.expect(pm.environment.get(k)).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)));",
+              "pm.test('CV fixture Students are distinct', () => pm.expect(pm.environment.get('candidateWithSavedCvId')).to.not.eql(pm.environment.get('candidateWithoutSavedCvId')));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "01 - Create prerequisite records",
+      "item": [
+        {
+          "name": "01 Create Company",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"name\":\"BMD-011 Company {{runId}}\",\"websiteUrl\":\"https://example.com\",\"contactEmail\":\"acceptance@example.com\",\"notes\":\"Shortlist acceptance fixture\"}" },
+            "url": "{{baseUrl}}/admin/companies"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Company create returns 201', () => pm.response.to.have.status(201));",
+            "const body=pm.response.json(); pm.collectionVariables.set('companyId', body.companyId); pm.collectionVariables.set('companyEtag', pm.response.headers.get('ETag'));",
+            "pm.test('Company has strong ETag', () => pm.expect(pm.response.headers.get('ETag')).to.match(/^\"\\d+\"$/));"
+          ] } }]
+        },
+        {
+          "name": "02 Create Internship Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"companyId\":\"{{companyId}}\",\"title\":\"BMD-011 Internship {{runId}}\",\"description\":\"Shortlist acceptance request\",\"shortlistGuidanceValue\":0,\"requiredSkills\":[{\"skillId\":\"{{activeSkillId}}\"}]}" },
+            "url": "{{baseUrl}}/admin/internship-requests"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Internship Request create returns 201', () => pm.response.to.have.status(201));",
+            "const body=pm.response.json(); pm.collectionVariables.set('requestId', body.requestId); pm.collectionVariables.set('requestEtag', pm.response.headers.get('ETag'));",
+            "pm.test('Guidance is zero for warning acceptance', () => pm.expect(body.shortlistGuidanceValue).to.eql(0));"
+          ] } }]
+        },
+        {
+          "name": "03 Create Candidate Filtering Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":0.00,\"runtimeGpaUpperBound\":4.00,\"requestSkillIds\":[\"{{activeSkillId}}\"],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Filtering run create returns 201', () => pm.response.to.have.status(201));",
+            "const body=pm.response.json(); pm.collectionVariables.set('filterRunId', body.filterRunId);",
+            "pm.test('Filtering run belongs to request', () => pm.expect(body.request.requestId).to.eql(pm.collectionVariables.get('requestId')));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "02 - Shortlist lifecycle",
+      "item": [
+        {
+          "name": "01 Create Draft Shortlist",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"filterRunId\":\"{{filterRunId}}\",\"name\":\"BMD-011 Shortlist {{runId}}\"}" },
+            "url": "{{baseUrl}}/admin/shortlists"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Shortlist create returns 201', () => pm.response.to.have.status(201));",
+            "const body=pm.response.json(); const etag=pm.response.headers.get('ETag'); pm.collectionVariables.set('shortlistId', body.shortlistId); pm.collectionVariables.set('shortlistEtag', etag); pm.collectionVariables.set('shortlistStaleEtag', etag);",
+            "pm.test('New shortlist is DRAFT with strong ETag', () => { pm.expect(body.status).to.eql('DRAFT'); pm.expect(etag).to.match(/^\"\\d+\"$/); });"
+          ] } }]
+        },
+        {
+          "name": "02 Reject Duplicate Shortlist",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"filterRunId\":\"{{filterRunId}}\",\"name\":\"Duplicate\"}" },
+            "url": "{{baseUrl}}/admin/shortlists"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Duplicate shortlist returns 409', () => pm.response.to.have.status(409));"] } }]
+        },
+        {
+          "name": "02b Reject Missing Internship Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"ffffffff-ffff-4fff-8fff-ffffffffffff\",\"name\":\"Missing request\"}" },
+            "url": "{{baseUrl}}/admin/shortlists"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Missing Internship Request returns 404', () => pm.response.to.have.status(404));"] } }]
+        },
+        {
+          "name": "02c Reject Missing Filter Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"filterRunId\":\"ffffffff-ffff-4fff-8fff-ffffffffffff\",\"name\":\"Missing filter run\"}" },
+            "url": "{{baseUrl}}/admin/shortlists"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Missing or mismatched Filter Run returns 400', () => pm.response.to.have.status(400));"] } }]
+        },
+        {
+          "name": "03 Reject Missing If-Match",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"studentIds\":[\"{{candidateWithSavedCvId}}\"]}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/candidates"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Missing If-Match returns 428', () => pm.response.to.have.status(428));"] } }]
+        },
+        {
+          "name": "04 Reject Duplicate Candidate Input",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlistEtag}}" }],
+            "body": { "mode": "raw", "raw": "{\"studentIds\":[\"{{candidateWithSavedCvId}}\",\"{{candidateWithSavedCvId}}\"]}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/candidates"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Duplicate candidate input returns 400', () => pm.response.to.have.status(400));"] } }]
+        },
+        {
+          "name": "04b Reject Unknown Student",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlistEtag}}" }],
+            "body": { "mode": "raw", "raw": "{\"studentIds\":[\"{{unknownStudentId}}\"]}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/candidates"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unknown Student returns 400', () => pm.response.to.have.status(400));"] } }]
+        },
+        {
+          "name": "05 Add Candidate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlistEtag}}" }],
+            "body": { "mode": "raw", "raw": "{\"studentIds\":[\"{{candidateWithSavedCvId}}\",\"{{candidateWithoutSavedCvId}}\"],\"note\":\"Acceptance candidates\"}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/candidates"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Candidate add returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json(); pm.collectionVariables.set('shortlistEtag', pm.response.headers.get('ETag'));",
+            "pm.test('Both candidates were added', () => { pm.expect(body.addedCount).to.eql(2); pm.expect(body.selectedCandidateCount).to.eql(2); });"
+          ] } }]
+        },
+        {
+          "name": "06 Reject Stale If-Match",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "{{shortlistStaleEtag}}" }],
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/candidates/{{candidateWithSavedCvId}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Stale If-Match returns 412', () => pm.response.to.have.status(412));"] } }]
+        },
+        {
+          "name": "07 Retrieve Detail",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}?candidatePage=0&candidateSize=20" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Shortlist detail returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json();",
+            "pm.test('Detail contains both candidates and stable page metadata', () => { pm.expect(body.shortlist.selectedCandidateCount).to.eql(2); pm.expect(body.candidates.content).to.have.length(2); pm.expect(body.candidates.page).to.eql(0); });"
+          ] } }]
+        },
+        {
+          "name": "08 Remove Candidate",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "{{shortlistEtag}}" }],
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/candidates/{{candidateWithSavedCvId}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Candidate removal returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json(); pm.collectionVariables.set('shortlistEtag', pm.response.headers.get('ETag'));",
+            "pm.test('One candidate remains', () => { pm.expect(body.removedCount).to.eql(1); pm.expect(body.selectedCandidateCount).to.eql(1); });"
+          ] } }]
+        },
+        {
+          "name": "09 Re-add Candidate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlistEtag}}" }],
+            "body": { "mode": "raw", "raw": "{\"studentIds\":[\"{{candidateWithSavedCvId}}\"]}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/candidates"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Candidate re-add returns 200', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('shortlistEtag', pm.response.headers.get('ETag'));"
+          ] } }]
+        },
+        {
+          "name": "10 Require Guidance Acknowledgement",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlistEtag}}" }],
+            "body": { "mode": "raw", "raw": "{\"acknowledgeGuidanceWarning\":false,\"finalizationNote\":\"Acceptance verification\"}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/finalize"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Exceeded guidance without acknowledgement returns 409', () => pm.response.to.have.status(409));"] } }]
+        },
+        {
+          "name": "11 Finalize Shortlist",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlistEtag}}" }],
+            "body": { "mode": "raw", "raw": "{\"acknowledgeGuidanceWarning\":true,\"finalizationNote\":\"Acceptance verification\"}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/finalize"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Shortlist finalization returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json(); pm.collectionVariables.set('shortlistEtag', pm.response.headers.get('ETag'));",
+            "pm.test('Shortlist is FINALIZED and warning acknowledged', () => { pm.expect(body.status).to.eql('FINALIZED'); pm.expect(body.guidanceAcknowledged).to.eql(true); });"
+          ] } }]
+        },
+        {
+          "name": "12 Reload Finalized Shortlist",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Finalized shortlist reload returns 200', () => pm.response.to.have.status(200));",
+            "pm.test('FINALIZED state persisted', () => pm.expect(pm.response.json().shortlist.status).to.eql('FINALIZED'));"
+          ] } }]
+        },
+        {
+          "name": "13 Reject Mutation After Finalization",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "If-Match", "value": "{{shortlistEtag}}" }],
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlistId}}/candidates/{{candidateWithSavedCvId}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Finalized shortlist mutation returns 409', () => pm.response.to.have.status(409));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 - Asynchronous exports",
+      "item": [
+        {
+          "name": "01 Create Summary CSV Export",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"format\":\"CSV\"}" },
+            "url": "{{baseUrl}}/admin/exports/shortlists/{{shortlistId}}"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Summary export is accepted', () => pm.response.to.have.status(202));",
+            "const body=pm.response.json(); pm.collectionVariables.set('summaryJobId', body.exportJobId); pm.collectionVariables.set('summaryPollCount', '0');",
+            "pm.test('Summary job is CSV and not synchronously downloaded', () => { pm.expect(body.exportType).to.eql('SHORTLIST_SUMMARY_CSV'); pm.expect(body.format).to.eql('CSV'); });"
+          ] } }]
+        },
+        {
+          "name": "02 Poll Summary CSV Export",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/exports/{{summaryJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Summary poll returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json(); let count=Number(pm.collectionVariables.get('summaryPollCount')||0);",
+            "if (['QUEUED','PROCESSING'].includes(body.status) && count < 20) { pm.collectionVariables.set('summaryPollCount', String(count+1)); pm.execution.setNextRequest(pm.info.requestName); } else { pm.test('Summary export completed', () => { pm.expect(body.status).to.eql('COMPLETED'); pm.expect(body.downloadReady).to.eql(true); }); }"
+          ] } }]
+        },
+        {
+          "name": "03 Download Summary CSV",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/exports/{{summaryJobId}}/download" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Summary CSV download returns 200', () => pm.response.to.have.status(200));",
+            "pm.test('Summary download is safe CSV attachment', () => { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv'); pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment'); pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'); });",
+            "pm.test('CSV contains header and candidate', () => { pm.expect(pm.response.text()).to.include('Student'); pm.expect(pm.response.text()).to.include(','); });"
+          ] } }]
+        },
+        {
+          "name": "04 Create Bulk CV ZIP Export",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"format\":\"ZIP\"}" },
+            "url": "{{baseUrl}}/admin/exports/shortlists/{{shortlistId}}/bulk-cvs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Bulk CV export is accepted', () => pm.response.to.have.status(202));",
+            "const body=pm.response.json(); pm.collectionVariables.set('bulkJobId', body.exportJobId); pm.collectionVariables.set('bulkPollCount', '0');",
+            "pm.test('Bulk job is ZIP', () => { pm.expect(body.exportType).to.eql('BULK_LATEST_CV_ZIP'); pm.expect(body.format).to.eql('ZIP'); });"
+          ] } }]
+        },
+        {
+          "name": "05 Poll Bulk CV ZIP Export",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/exports/{{bulkJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Bulk poll returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json(); let count=Number(pm.collectionVariables.get('bulkPollCount')||0);",
+            "if (['QUEUED','PROCESSING'].includes(body.status) && count < 20) { pm.collectionVariables.set('bulkPollCount', String(count+1)); pm.execution.setNextRequest(pm.info.requestName); } else { pm.test('Partial bulk CV export completed with explicit missing-CV evidence', () => { pm.expect(body.status).to.eql('COMPLETED'); pm.expect(body.downloadReady).to.eql(true); pm.expect(body.includedFileCount).to.be.above(0); pm.expect(body.missingCvCount).to.be.above(0); pm.expect(body.missingCvStudents).to.be.an('array').and.not.empty; }); }"
+          ] } }]
+        },
+        {
+          "name": "06 Download Bulk CV ZIP",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/exports/{{bulkJobId}}/bulk-cvs/download" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Bulk ZIP download returns 200', () => pm.response.to.have.status(200));",
+            "pm.test('Bulk download is safe ZIP attachment', () => { pm.expect(pm.response.headers.get('Content-Type')).to.include('application/zip'); pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment'); pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'); });",
+            "pm.test('ZIP body is not empty', () => pm.expect(pm.response.stream.length).to.be.above(20));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "04 - Zero available CV export",
+      "item": [
+        {
+          "name": "01 Create Second Internship Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"companyId\":\"{{companyId}}\",\"title\":\"BMD-011 No-CV Internship {{runId}}\",\"shortlistGuidanceValue\":1,\"requiredSkills\":[{\"skillId\":\"{{activeSkillId}}\"}]}" },
+            "url": "{{baseUrl}}/admin/internship-requests"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Second Internship Request returns 201', () => pm.response.to.have.status(201));",
+            "const body=pm.response.json(); pm.collectionVariables.set('request2Id', body.requestId); pm.collectionVariables.set('request2Etag', pm.response.headers.get('ETag'));"
+          ] } }]
+        },
+        {
+          "name": "02 Create Empty Shortlist",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{request2Id}}\",\"name\":\"BMD-011 Zero-CV Shortlist {{runId}}\"}" },
+            "url": "{{baseUrl}}/admin/shortlists"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Second Shortlist returns 201', () => pm.response.to.have.status(201));",
+            "const body=pm.response.json(); pm.collectionVariables.set('shortlist2Id', body.shortlistId); pm.collectionVariables.set('shortlist2Etag', pm.response.headers.get('ETag'));"
+          ] } }]
+        },
+        {
+          "name": "03 Reject Empty Finalization",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlist2Etag}}" }],
+            "body": { "mode": "raw", "raw": "{\"acknowledgeGuidanceWarning\":true}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlist2Id}}/finalize"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Empty shortlist finalization returns 400', () => pm.response.to.have.status(400));"] } }]
+        },
+        {
+          "name": "04 Add No-CV Candidate",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlist2Etag}}" }],
+            "body": { "mode": "raw", "raw": "{\"studentIds\":[\"{{candidateWithoutSavedCvId}}\"]}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlist2Id}}/candidates"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('No-CV candidate add returns 200', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('shortlist2Etag', pm.response.headers.get('ETag'));"
+          ] } }]
+        },
+        {
+          "name": "05 Finalize No-CV Shortlist",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "{{shortlist2Etag}}" }],
+            "body": { "mode": "raw", "raw": "{\"acknowledgeGuidanceWarning\":true}" },
+            "url": "{{baseUrl}}/admin/shortlists/{{shortlist2Id}}/finalize"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('No-CV shortlist finalization returns 200', () => pm.response.to.have.status(200));",
+            "pm.collectionVariables.set('shortlist2Etag', pm.response.headers.get('ETag'));"
+          ] } }]
+        },
+        {
+          "name": "06 Create Zero-CV Bulk Export",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"format\":\"ZIP\"}" },
+            "url": "{{baseUrl}}/admin/exports/shortlists/{{shortlist2Id}}/bulk-cvs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Zero-CV export is accepted asynchronously', () => pm.response.to.have.status(202));",
+            "const body=pm.response.json(); pm.collectionVariables.set('zeroCvJobId', body.exportJobId); pm.collectionVariables.set('zeroCvPollCount', '0');"
+          ] } }]
+        },
+        {
+          "name": "07 Poll Zero-CV Bulk Export",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/exports/{{zeroCvJobId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Zero-CV poll returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json(); let count=Number(pm.collectionVariables.get('zeroCvPollCount')||0);",
+            "if (['QUEUED','PROCESSING'].includes(body.status) && count < 20) { pm.collectionVariables.set('zeroCvPollCount', String(count+1)); pm.execution.setNextRequest(pm.info.requestName); } else { pm.test('Zero-CV export fails explicitly and safely', () => { pm.expect(body.status).to.eql('FAILED'); pm.expect(body.failureCode).to.eql('NO_CV_FILES_AVAILABLE'); pm.expect(body.downloadReady).to.eql(false); }); }"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "05 - Security and validation",
+      "item": [
+        {
+          "name": "01 Reject Anonymous Access",
+          "auth": { "type": "noauth" },
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/shortlists" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Anonymous access returns 401', () => pm.response.to.have.status(401));"] } }]
+        },
+        {
+          "name": "02 Reject Student Access",
+          "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{studentToken}}", "type": "string" }] },
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/shortlists" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Student access returns 403', () => pm.response.to.have.status(403));"] } }]
+        },
+        {
+          "name": "03 Reject Invalid UUID",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/shortlists/not-a-uuid" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Invalid UUID returns 400', () => pm.response.to.have.status(400));"] } }]
+        },
+        {
+          "name": "04 Reject Invalid Pagination",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/shortlists?page=-1&size=101" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Invalid pagination returns 400', () => pm.response.to.have.status(400));"] } }]
+        },
+        {
+          "name": "05 Reject Unknown Export Job",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/exports/ffffffff-ffff-4fff-8fff-ffffffffffff" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unknown export job returns 404', () => pm.response.to.have.status(404));"] } }]
+        }
+      ]
+    }
+  ]
+}
