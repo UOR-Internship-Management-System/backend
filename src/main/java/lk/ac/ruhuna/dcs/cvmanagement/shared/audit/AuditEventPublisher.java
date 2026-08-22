@@ -1,13 +1,10 @@
 package lk.ac.ruhuna.dcs.cvmanagement.shared.audit;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,12 +12,10 @@ public class AuditEventPublisher {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AuditEventPublisher.class);
 
-    private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper;
+    private final AuditEventSink auditEventSink;
 
-    public AuditEventPublisher(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.objectMapper = objectMapper;
+    public AuditEventPublisher(AuditEventSink auditEventSink) {
+        this.auditEventSink = auditEventSink;
     }
 
     public void record(UUID actorUserId, String actorRole, String eventType, String resourceType, String resourceId) {
@@ -59,22 +54,18 @@ public class AuditEventPublisher {
             String resourceType,
             String resourceId,
             Map<String, ?> metadata) {
-        jdbcTemplate.update(
-                """
-                INSERT INTO audit_events (
-                    actor_user_id, actor_role, event_type, event_category,
-                    resource_type, resource_id, metadata, correlation_id
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?)
-                """,
+        AuditEventOutcome outcome = outcomeFor(eventType);
+        auditEventSink.persist(new AuditEvent(
                 actorUserId,
                 actorRole,
                 eventType,
-                category.name(),
+                category,
+                outcome,
+                category == AuditEventCategory.SECURITY ? severityFor(outcome) : null,
                 resourceType,
                 resourceId,
-                serialize(metadata),
-                CorrelationIdContext.current().orElse(null));
+                metadata == null ? Map.of() : metadata,
+                CorrelationIdContext.current().orElse(null)));
     }
 
     public void recordBestEffort(
@@ -92,11 +83,26 @@ public class AuditEventPublisher {
         }
     }
 
-    private String serialize(Map<String, ?> metadata) {
-        try {
-            return objectMapper.writeValueAsString(metadata == null ? Map.of() : metadata);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("Audit metadata could not be serialized.", exception);
+    private AuditEventOutcome outcomeFor(String eventType) {
+        String normalized = eventType == null ? "" : eventType.toUpperCase(java.util.Locale.ROOT);
+        if (normalized.contains("FAILED") || normalized.contains("FAILURE") || normalized.contains("UNAVAILABLE")) {
+            return AuditEventOutcome.FAILED;
         }
+        if (normalized.contains("DENIED") || normalized.contains("REJECTED")
+                || normalized.contains("NON_ELIGIBLE")) {
+            return AuditEventOutcome.DENIED;
+        }
+        if (normalized.endsWith("_STARTED") || normalized.endsWith("_SENT")
+                || normalized.endsWith("_REQUESTED")) {
+            return AuditEventOutcome.ATTEMPTED;
+        }
+        return AuditEventOutcome.SUCCEEDED;
+    }
+
+    private AuditEventSeverity severityFor(AuditEventOutcome outcome) {
+        return switch (outcome) {
+            case FAILED, DENIED -> AuditEventSeverity.WARN;
+            case SUCCEEDED, ATTEMPTED -> AuditEventSeverity.INFO;
+        };
     }
 }
