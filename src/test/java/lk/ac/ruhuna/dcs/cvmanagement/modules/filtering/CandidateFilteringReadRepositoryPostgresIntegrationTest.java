@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -286,11 +287,11 @@ class CandidateFilteringReadRepositoryPostgresIntegrationTest {
         assertThat(ids(searchPage.getContent())).containsExactly(STUDENT_TIE_ONE, STUDENT_TIE_TWO);
 
         assertThatThrownBy(() -> repository.searchCandidates(noFilters(), null, -1, 20, CandidateSort.DEFAULT))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidDataAccessApiUsageException.class);
         assertThatThrownBy(() -> repository.searchCandidates(noFilters(), null, 0, 0, CandidateSort.DEFAULT))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidDataAccessApiUsageException.class);
         assertThatThrownBy(() -> repository.searchCandidates(noFilters(), null, 0, 101, CandidateSort.DEFAULT))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(InvalidDataAccessApiUsageException.class);
     }
 
     @Test
