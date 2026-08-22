@@ -35,3 +35,5 @@ postman/company-internship/*.local.postman_environment.json
 postman/company-internship/reports/
 postman/cv-generation/*.local.postman_environment.json
 postman/cv-generation/reports/
+postman/admin-student-inspection/*.local.postman_environment.json
+postman/admin-student-inspection/reports/

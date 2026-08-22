@@ -148,6 +148,10 @@ public class AdminStudentInspectionService {
                         "STUDENT_CV",
                         safeStudentId.toString(),
                         Map.of());
+                throw AdminStudentErrors.cvFileUnavailable(exception);
+            }
+            if (exception.getErrorCode() == ApiErrorCode.CV_NOT_SAVED) {
+                throw AdminStudentErrors.cvNotSaved();
             }
             throw exception;
         }

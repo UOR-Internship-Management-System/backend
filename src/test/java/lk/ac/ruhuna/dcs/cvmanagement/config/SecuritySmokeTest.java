@@ -94,6 +94,43 @@ class SecuritySmokeTest {
     }
 
     @Test
+    void adminStudentInspectionRoutesRequireAuthentication() throws Exception {
+        String studentId = "40000000-0000-4000-8000-000000000001";
+        mockMvc.perform(get("/api/v1/admin/students")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/declared-skills", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/projects", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/academic-records", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/latest-cv", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/latest-cv/download", studentId))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    void studentRoleCannotAccessAdminStudentInspectionRoutes() throws Exception {
+        String studentId = "40000000-0000-4000-8000-000000000001";
+        mockMvc.perform(get("/api/v1/admin/students")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/declared-skills", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/projects", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/academic-records", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/latest-cv", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/latest-cv/download", studentId))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void studentVerificationPathIsNotBlocked() throws Exception {
         // Controller does not exist yet, so 404 or 405 is acceptable.
         // 401 or 403 would indicate a security misconfiguration.

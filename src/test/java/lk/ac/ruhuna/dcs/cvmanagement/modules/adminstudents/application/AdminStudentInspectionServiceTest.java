@@ -3,7 +3,9 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
@@ -12,6 +14,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.exception.RegisteredStudentNotFoundException;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.exception.CvFileUnavailableException;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.domain.exception.CvNotSavedException;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.mapper.AdminStudentMapper;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.AdminStudentProfileRow;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.projection.RegisteredStudentRow;
@@ -20,6 +24,8 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.persistence.query.Reg
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.ActiveCvFileResolver;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.cv.application.port.LatestSavedCvQuery;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventCategory;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.RoleName;
@@ -160,6 +166,104 @@ class AdminStudentInspectionServiceTest {
         assertThat(response.cvId()).isEqualTo(cvId);
         assertThat(response.revision()).isEqualTo(3);
         assertThat(response.downloadUrl()).isEqualTo("/admin/students/" + studentId + "/latest-cv/download");
+    }
+
+    @Test
+    void mapsMissingAndOutdatedLatestCvWithoutCreatingState() {
+        UUID studentId = UUID.randomUUID();
+        UUID cvId = UUID.randomUUID();
+        OffsetDateTime generatedAt = OffsetDateTime.parse("2026-08-19T03:00:00Z");
+        when(currentActorProvider.currentActor()).thenReturn(Optional.of(adminActor()));
+        when(registeredRepository.existsRegisteredStudent(studentId)).thenReturn(true);
+
+        assertThat(service.getLatestCv(studentId).availability().name()).isEqualTo("NOT_SAVED");
+
+        when(latestSavedCvQuery.findByStudentId(studentId)).thenReturn(Optional.of(
+                new LatestSavedCvQuery.LatestSavedCv(
+                        studentId, cvId, 4, generatedAt, generatedAt.plusMinutes(1), "OUTDATED",
+                        "cv-" + studentId + ".pdf", 4096)));
+
+        assertThat(service.getLatestCv(studentId).freshnessStatus().name()).isEqualTo("OUTDATED");
+        verifyNoInteractions(activeCvFileResolver, auditEventPublisher);
+    }
+
+    @Test
+    void downloadsExactActivePdfAndRecordsRequiredAdminAudit() {
+        UUID studentId = UUID.randomUUID();
+        UUID cvId = UUID.randomUUID();
+        CurrentActor actor = adminActor();
+        byte[] bytes = "%PDF-1.7 admin inspection".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        var resolved = new ActiveCvFileResolver.ResolvedCvFile(
+                cvId, 5, "cv-" + studentId + ".pdf", bytes.length, bytes);
+        when(currentActorProvider.currentActor()).thenReturn(Optional.of(actor));
+        when(registeredRepository.existsRegisteredStudent(studentId)).thenReturn(true);
+        when(activeCvFileResolver.resolve(studentId)).thenReturn(resolved);
+
+        var actual = service.downloadLatestCv(studentId);
+
+        assertThat(actual.cvId()).isEqualTo(cvId);
+        assertThat(actual.bytes()).containsExactly(bytes);
+        verify(auditEventPublisher).recordRequired(
+                actor.userId(),
+                "ADMIN",
+                AuditEventType.CV_DOWNLOADED_BY_ADMIN.name(),
+                AuditEventCategory.CV_MANAGEMENT,
+                "CV",
+                cvId.toString(),
+                java.util.Map.of(
+                        "studentId", studentId.toString(),
+                        "revision", 5,
+                        "fileSizeBytes", (long) bytes.length));
+        verify(auditEventPublisher, never()).recordBestEffort(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void translatesMissingSavedCvIntoAdminStudentProblemContract() {
+        UUID studentId = UUID.randomUUID();
+        when(currentActorProvider.currentActor()).thenReturn(Optional.of(adminActor()));
+        when(registeredRepository.existsRegisteredStudent(studentId)).thenReturn(true);
+        when(activeCvFileResolver.resolve(studentId))
+                .thenThrow(new lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvNotSavedException());
+
+        assertThatThrownBy(() -> service.downloadLatestCv(studentId))
+                .isInstanceOf(CvNotSavedException.class);
+        verifyNoInteractions(auditEventPublisher);
+    }
+
+    @Test
+    void auditsUnavailablePdfAndTranslatesTheCvBoundaryError() {
+        UUID studentId = UUID.randomUUID();
+        CurrentActor actor = adminActor();
+        when(currentActorProvider.currentActor()).thenReturn(Optional.of(actor));
+        when(registeredRepository.existsRegisteredStudent(studentId)).thenReturn(true);
+        when(activeCvFileResolver.resolve(studentId))
+                .thenThrow(new lk.ac.ruhuna.dcs.cvmanagement.modules.cv.domain.exception.CvFileUnavailableException());
+
+        assertThatThrownBy(() -> service.downloadLatestCv(studentId))
+                .isInstanceOf(CvFileUnavailableException.class);
+        verify(auditEventPublisher).recordBestEffort(
+                actor.userId(),
+                "ADMIN",
+                AuditEventType.CV_FILE_UNAVAILABLE.name(),
+                AuditEventCategory.CV_MANAGEMENT,
+                "STUDENT_CV",
+                studentId.toString(),
+                java.util.Map.of());
+        verify(auditEventPublisher, never()).recordRequired(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
     }
 
     private CurrentActor adminActor() {
