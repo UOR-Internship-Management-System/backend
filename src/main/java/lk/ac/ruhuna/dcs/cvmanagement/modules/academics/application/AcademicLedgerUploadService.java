@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -151,8 +152,8 @@ public class AcademicLedgerUploadService {
         AcademicLedgerValidationStatus validation = parseValidationStatus(validationStatus);
 
         PageRequest pageable = PageRequest.of(safePage, safeSize, safeSort.sort());
-        Page<AcademicLedgerUploadEntity> uploads = uploadRepository.searchUploads(
-                safeSearch, uploadStatus, validation, pageable);
+        Page<AcademicLedgerUploadEntity> uploads = uploadRepository.findAll(
+                uploadSpecification(safeSearch, uploadStatus, validation), pageable);
 
         Map<UUID, FileAssetEntity> assets = fileAssetRepository.findAllById(
                         uploads.getContent().stream().map(AcademicLedgerUploadEntity::getSourceFileAssetId).toList())
@@ -163,6 +164,28 @@ public class AcademicLedgerUploadService {
         Page<AcademicLedgerUploadSummaryResponse> mapped = uploads.map(upload ->
                 toSummary(upload, requiredAsset(assets, upload.getSourceFileAssetId())));
         return PagedResponse.of(mapped, safeSort.apiValue());
+    }
+
+    private Specification<AcademicLedgerUploadEntity> uploadSpecification(
+            String search,
+            AcademicLedgerUploadStatus uploadStatus,
+            AcademicLedgerValidationStatus validationStatus) {
+        Specification<AcademicLedgerUploadEntity> specification =
+                (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        if (search != null) {
+            String pattern = "%" + search + "%";
+            specification = specification.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("fileName")), pattern));
+        }
+        if (uploadStatus != null) {
+            specification = specification.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("uploadStatus"), uploadStatus));
+        }
+        if (validationStatus != null) {
+            specification = specification.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("validationStatus"), validationStatus));
+        }
+        return specification;
     }
 
     @Transactional(readOnly = true)
