@@ -26,6 +26,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActorProvider;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.RoleName;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -83,8 +84,9 @@ public class AcademicLedgerReviewService {
         String safeSearch = normalizeSearch(search);
         AcademicLedgerRowValidationStatus rowStatus = parseRowValidationStatus(validationStatus);
         AcademicLedgerStagedRowSort safeSort = AcademicLedgerStagedRowSort.fromApiValue(sort);
-        Page<AcademicLedgerStagingRowEntity> rows = stagingRepository.searchRows(
-                uploadId, safeSearch, rowStatus, PageRequest.of(safePage, safeSize, safeSort.sort()));
+        Page<AcademicLedgerStagingRowEntity> rows = stagingRepository.findAll(
+                stagedRowSpecification(uploadId, safeSearch, rowStatus),
+                PageRequest.of(safePage, safeSize, safeSort.sort()));
 
         List<UUID> rowIds = rows.getContent().stream().map(AcademicLedgerStagingRowEntity::getId).toList();
         Map<UUID, List<AcademicLedgerValidationErrorEntity>> errorsByRow = rowIds.isEmpty()
@@ -94,6 +96,27 @@ public class AcademicLedgerReviewService {
         Page<AcademicLedgerStagedRowResponse> mapped = rows.map(row -> mapper.toStagedRow(
                 row, errorsByRow.getOrDefault(row.getId(), List.of())));
         return PagedResponse.of(mapped, safeSort.apiValue());
+    }
+
+    private Specification<AcademicLedgerStagingRowEntity> stagedRowSpecification(
+            UUID uploadId,
+            String search,
+            AcademicLedgerRowValidationStatus validationStatus) {
+        Specification<AcademicLedgerStagingRowEntity> specification =
+                (root, query, criteriaBuilder) ->
+                        criteriaBuilder.equal(root.get("academicLedgerUploadId"), uploadId);
+        if (search != null) {
+            String pattern = "%" + search + "%";
+            specification = specification.and((root, query, criteriaBuilder) -> criteriaBuilder.or(
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("studentIndexNumber")), pattern),
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("courseCode")), pattern),
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("courseTitle")), pattern)));
+        }
+        if (validationStatus != null) {
+            specification = specification.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("validationStatus"), validationStatus));
+        }
+        return specification;
     }
 
     @Transactional(readOnly = true)

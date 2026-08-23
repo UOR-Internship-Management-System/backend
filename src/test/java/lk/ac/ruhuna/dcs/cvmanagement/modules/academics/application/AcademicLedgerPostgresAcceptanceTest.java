@@ -80,6 +80,7 @@ class AcademicLedgerPostgresAcceptanceTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private AcademicLedgerCommitService commitService;
     @Autowired private AcademicLedgerUploadService uploadService;
+    @Autowired private AcademicLedgerReviewService reviewService;
     @Autowired private AcademicLedgerProcessingStateService processingStateService;
     @Autowired private AcademicLedgerProcessingService processingService;
     @Autowired private FileStoragePort fileStorage;
@@ -253,6 +254,24 @@ class AcademicLedgerPostgresAcceptanceTest {
                         Integer.class,
                         checksum))
                 .isEqualTo(1);
+    }
+
+    @Test
+    void unfilteredUploadHistoryAndStagedRowsCanBeReadOnPostgres() {
+        UUID uploadId = createUpload("read-paths.csv", "read-paths", "READY_TO_COMMIT", 1, 1);
+        insertValidStagingRow(uploadId, 2, SUBJECT_ONE_ID, "CSC2113");
+        authenticateAdmin();
+
+        var uploads = uploadService.listUploads(0, 20, "uploadedAt,desc", null, null, null);
+        assertThat(uploads.items()).extracting(item -> item.uploadId()).contains(uploadId);
+
+        var stagedRows = reviewService.listStagedRows(
+                uploadId, 0, 20, "rowNumber,asc", null, null);
+        assertThat(stagedRows.items()).singleElement().satisfies(row -> {
+            assertThat(row.uploadId()).isEqualTo(uploadId);
+            assertThat(row.rowNumber()).isEqualTo(2);
+            assertThat(row.courseCode()).isEqualTo("CSC2113");
+        });
     }
 
     private void clearAcceptanceData() {

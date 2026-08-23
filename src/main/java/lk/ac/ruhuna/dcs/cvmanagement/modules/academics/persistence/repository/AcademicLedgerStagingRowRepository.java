@@ -7,32 +7,16 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.persistence.entity.Academ
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface AcademicLedgerStagingRowRepository extends JpaRepository<AcademicLedgerStagingRowEntity, UUID> {
+public interface AcademicLedgerStagingRowRepository extends
+        JpaRepository<AcademicLedgerStagingRowEntity, UUID>,
+        JpaSpecificationExecutor<AcademicLedgerStagingRowEntity> {
 
     List<AcademicLedgerStagingRowEntity> findAllByAcademicLedgerUploadIdOrderByRowNumberAsc(UUID academicLedgerUploadId);
-
-    @Query(
-            """
-            select r
-            from AcademicLedgerStagingRowEntity r
-            where r.academicLedgerUploadId = :uploadId
-              and (
-                  :search is null
-                  or locate(lower(:search), lower(r.studentIndexNumber)) > 0
-                  or locate(lower(:search), lower(r.courseCode)) > 0
-                  or locate(lower(:search), lower(coalesce(r.courseTitle, ''))) > 0
-              )
-              and (:validationStatus is null or r.validationStatus = :validationStatus)
-            """)
-    Page<AcademicLedgerStagingRowEntity> searchRows(
-            @Param("uploadId") UUID uploadId,
-            @Param("search") String search,
-            @Param("validationStatus") AcademicLedgerRowValidationStatus validationStatus,
-            Pageable pageable);
 
     @Query(
             """
