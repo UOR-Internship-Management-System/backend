@@ -97,19 +97,23 @@ public class ShortlistReadRepository {
             int page,
             int size,
             String orderBy) {
-        String where = """
+        StringBuilder where = new StringBuilder("""
                  WHERE (:search = '' OR LOWER(COALESCE(s.name, '') || ' ' || c.name || ' ' || ir.title)
                         LIKE :searchPattern ESCAPE '\\')
-                   AND (:status IS NULL OR s.status = :status)
-                   AND (:companyId IS NULL OR c.id = :companyId)
-                """;
+                """);
         MapSqlParameterSource parameters = new MapSqlParameterSource()
                 .addValue("search", search)
                 .addValue("searchPattern", "%" + escapeLike(search.toLowerCase()) + "%")
-                .addValue("status", status == null ? null : status.name())
-                .addValue("companyId", companyId)
                 .addValue("limit", size)
                 .addValue("offset", (long) page * size);
+        if (status != null) {
+            where.append(" AND s.status = :status");
+            parameters.addValue("status", status.name());
+        }
+        if (companyId != null) {
+            where.append(" AND c.id = :companyId");
+            parameters.addValue("companyId", companyId);
+        }
 
         List<ShortlistSummaryRow> rows = jdbc.query(
                 SUMMARY_SELECT + where + " ORDER BY " + orderBy + " LIMIT :limit OFFSET :offset",
