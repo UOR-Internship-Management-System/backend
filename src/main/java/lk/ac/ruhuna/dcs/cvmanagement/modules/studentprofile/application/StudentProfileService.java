@@ -1,6 +1,7 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.application;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.ActivityRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.AwardRequest;
@@ -31,9 +32,11 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.reposito
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentProfileRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.WorkExperienceRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.api.dto.FileAssetResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.PreconditionFailedException;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.files.ProfileFileService;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.PageRequestFactory;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.security.CurrentActor;
@@ -56,6 +59,7 @@ public class StudentProfileService {
     private final WorkExperienceRepository workExperienceRepository;
     private final StudentProfileMapper mapper;
     private final CvSourceFreshnessUpdatePort cvFreshnessUpdatePort;
+    private final ProfileFileService profileFileService;
 
     public StudentProfileService(
         CurrentActorProvider currentActorProvider,
@@ -67,7 +71,8 @@ public class StudentProfileService {
         ActivityRepository activityRepository,
         WorkExperienceRepository workExperienceRepository,
         StudentProfileMapper mapper,
-        CvSourceFreshnessUpdatePort cvFreshnessUpdatePort) {
+        CvSourceFreshnessUpdatePort cvFreshnessUpdatePort,
+        ProfileFileService profileFileService) {
         this.currentActorProvider = currentActorProvider;
         this.studentRepository = studentRepository;
         this.studentProfileRepository = studentProfileRepository;
@@ -78,6 +83,7 @@ public class StudentProfileService {
         this.workExperienceRepository = workExperienceRepository;
         this.mapper = mapper;
         this.cvFreshnessUpdatePort = cvFreshnessUpdatePort;
+        this.profileFileService = profileFileService;
     }
 
     // ---- current student resolution ----
@@ -108,7 +114,8 @@ public class StudentProfileService {
     public StudentProfileResponse getMyProfile() {
         StudentEntity student = currentStudent();
         StudentProfileEntity profile = getOrCreateProfile(student.getId());
-        return mapper.toResponse(student, profile);
+        return mapper.toResponse(student, profile,
+            profileFileService.resolve(profile.getProfilePhotoFileId()));
     }
 
     @Transactional
@@ -126,7 +133,8 @@ public class StudentProfileService {
 
         StudentProfileEntity saved = studentProfileRepository.save(profile);
         cvFreshnessUpdatePort.markChanged(student.getId(), CvSourceArea.PROFILE);
-        return mapper.toResponse(student, saved);
+        return mapper.toResponse(student, saved,
+            profileFileService.resolve(saved.getProfilePhotoFileId()));
     }
 
     // ---- contact links ----
@@ -199,7 +207,15 @@ public class StudentProfileService {
         Pageable pageable = PageRequestFactory.build(page, size, sort);
         String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";
         Page<CertificateEntity> result = certificateRepository.search(studentId, searchPattern, pageable);
-        return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));
+
+        // One query for every evidence file on this page. Resolving inside the map below would
+        // issue one query per certificate.
+        Map<UUID, FileAssetResponse> evidence = profileFileService.resolveAll(
+            result.getContent().stream().map(CertificateEntity::getEvidenceFileId).toList());
+
+        return PagedResponse.of(
+            result.map(entity -> mapper.toResponse(entity, evidence.get(entity.getEvidenceFileId()))),
+            PageRequestFactory.describeSort(sort));
     }
 
     @Transactional
@@ -218,7 +234,8 @@ public class StudentProfileService {
         entity.setUpdatedAt(now);
         CertificateEntity saved = certificateRepository.save(entity);
         cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
-        return mapper.toResponse(saved);
+        // A newly created certificate never has evidence yet; it is attached separately.
+        return mapper.toResponse(saved, null);
     }
 
     @Transactional
@@ -239,7 +256,8 @@ public class StudentProfileService {
         entity.setUpdatedAt(OffsetDateTime.now());
         CertificateEntity saved = certificateRepository.save(entity);
         cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
-        return mapper.toResponse(saved);
+        // Editing fields must not drop an already-attached evidence file from the response.
+        return mapper.toResponse(saved, profileFileService.resolve(saved.getEvidenceFileId()));
     }
 
     @Transactional
@@ -251,7 +269,10 @@ public class StudentProfileService {
         if (!entity.getVersion().equals(ifMatchVersion)) {
             throw new PreconditionFailedException("Certificate has been modified since it was last read.");
         }
+        // Read the file id before the delete; afterwards the entity is detached.
+        UUID evidenceFileId = entity.getEvidenceFileId();
         certificateRepository.delete(entity);
+        profileFileService.delete(evidenceFileId);
         cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
     }
 

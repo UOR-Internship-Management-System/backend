@@ -45,6 +45,23 @@ management:
       enabled: true
 
 app:
+  email:
+    # 'log' writes OTPs to the application log (development only).
+    # 'smtp' sends real mail and requires spring.mail.* below.
+    mode: ${APP_EMAIL_MODE:log}
+    from: ${APP_EMAIL_FROM:no-reply@cvmanagement.local}
+
+  files:
+    public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+    profile-photo:
+      allowed-mime-types: [ image/jpeg, image/png ]
+      allowed-extensions: [ ".jpg", ".jpeg", ".png" ]
+      max-size-bytes: 2000000
+    certificate-evidence:
+      allowed-mime-types: [ application/pdf, image/jpeg, image/png ]
+      allowed-extensions: [ ".pdf", ".jpg", ".jpeg", ".png" ]
+      max-size-bytes: 5000000
+
   auth:
     otp:
       length: ${APP_AUTH_OTP_LENGTH:6}

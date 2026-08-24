@@ -1,4 +1,4 @@
-package lk.ac.ruhuna.dcs.cvmanagement.shared.file;
+package lk.ac.ruhuna.dcs.cvmanagement.shared.files;
 
 /**
  * Reference to a stored file asset.
