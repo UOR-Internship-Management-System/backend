@@ -13,32 +13,29 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.C
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentProfileEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.WorkExperienceEntity;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.api.dto.FileAssetResponse;
 import org.springframework.stereotype.Component;
 
 @Component
 public class StudentProfileMapper {
 
-    public StudentProfileResponse toResponse(StudentEntity student, StudentProfileEntity profile) {
+    public StudentProfileResponse toResponse(StudentEntity s, StudentProfileEntity p) {
+        return toResponse(s, p, null);
+    }
+
+    public StudentProfileResponse toResponse(
+        StudentEntity student, StudentProfileEntity profile, FileAssetResponse photo) {
         String fullName = (profile.getDisplayName() != null && !profile.getDisplayName().isBlank())
             ? profile.getDisplayName()
             : student.getFullName();
         return new StudentProfileResponse(
-            student.getId(),
-            fullName,
-            student.getIndexNumber(),
-            student.getUniversityEmail(),
-            "BSc Honours in Computer Science",
-            student.getAcademicLevel(),
-            parseCohortYear(student.getIndexNumber()),
-            profile.getPersonalEmail(),
-            profile.getHeadline(),
-            profile.getSummary(),
-            profile.getPhone(),
-            profile.getLocation(),
-            null,
+            student.getId(), fullName, student.getIndexNumber(), student.getUniversityEmail(),
+            "Bachelor of Computer Science (BCS)", student.getAcademicLevel(),
+            parseCohortYear(student.getIndexNumber()), profile.getPersonalEmail(),
+            profile.getHeadline(), profile.getSummary(), profile.getPhone(), profile.getLocation(),
+            photo,                                    // was: null
             profile.getVersion() != null ? profile.getVersion() : 0L,
-            profile.getUpdatedAt(),
-            profile.getUpdatedAt());
+            profile.getUpdatedAt(), profile.getUpdatedAt());
     }
 
     private Integer parseCohortYear(String indexNumber) {
@@ -65,17 +62,17 @@ public class StudentProfileMapper {
     }
 
     public CertificateResponse toResponse(CertificateEntity entity) {
+        return toResponse(entity, null);
+    }
+
+    public CertificateResponse toResponse(CertificateEntity entity, FileAssetResponse evidence) {
         return new CertificateResponse(
-            entity.getId(),
-            entity.getTitle(),
-            entity.getIssuer(),
-            entity.getIssueDate(),
+            entity.getId(), entity.getTitle(), entity.getIssuer(), entity.getIssueDate(),
             entity.getCredentialUrl(),
-            null, // evidence — stubbed until file upload is built
+            evidence,                                 // was: null — remove the "stubbed" comment
             entity.isCvInclude(),
             entity.getVersion() != null ? entity.getVersion() : 0L,
-            entity.getCreatedAt(),
-            entity.getUpdatedAt());
+            entity.getCreatedAt(), entity.getUpdatedAt());
     }
 
     public AwardResponse toResponse(AwardEntity entity) {
