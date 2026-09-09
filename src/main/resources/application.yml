@@ -118,4 +118,4 @@ app:
 logging:
   level:
     root: INFO
-    lk.ac.ruhuna.dcs.cvmanagement: INFO
+    lk.ac.ruhuna.dcs.cvmanagement: DEBUG

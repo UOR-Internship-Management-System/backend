@@ -1,12 +1,12 @@
 package lk.ac.ruhuna.dcs.cvmanagement.infrastructure.email;
 
+import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,6 +15,11 @@ import org.springframework.stereotype.Component;
  * <p>Active only when {@code app.email.mode=smtp}. Failures propagate as
  * {@link EmailDeliveryException} so the caller never reports success on a message that was not
  * accepted by the transport.
+ *
+ * <p>Sends multipart/alternative: a plain-text part and an HTML part. Passing the plain-text
+ * argument first to {@link MimeMessageHelper#setText(String, String)} is what produces
+ * multipart/alternative rather than HTML-only, which improves deliverability and gives clients
+ * that block HTML a readable fallback.
  */
 @Component
 @ConditionalOnProperty(name = "app.email.mode", havingValue = "smtp")
@@ -33,17 +38,20 @@ public class SmtpEmailSender implements EmailSender {
     }
 
     @Override
-    public void send(String recipientEmail, String subject, String body) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromAddress);
-        message.setTo(recipientEmail);
-        message.setSubject(subject);
-        message.setText(body);
-
+    public void send(String recipientEmail, String subject, String textBody, String htmlBody) {
         try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromAddress);
+            helper.setTo(recipientEmail);
+            helper.setSubject(subject);
+            // Plain text first, HTML second: this produces multipart/alternative.
+            helper.setText(textBody, htmlBody);
+
             mailSender.send(message);
             LOGGER.info("Transactional email dispatched to recipient={}", maskEmail(recipientEmail));
-        } catch (MailException exception) {
+        } catch (Exception exception) {
             // Never log the body — it contains the OTP.
             LOGGER.error(
                 "Transactional email delivery failed for recipient={}",

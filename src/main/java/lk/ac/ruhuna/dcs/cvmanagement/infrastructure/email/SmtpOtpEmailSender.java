@@ -30,9 +30,11 @@ public class SmtpOtpEmailSender implements OtpEmailSender {
 
     @Override
     public void sendOtp(String recipientEmail, String purpose, String otp, Instant expiresAt) {
+        Instant now = Instant.now(clock);
         emailSender.send(
             recipientEmail,
             templateRenderer.subjectFor(purpose),
-            templateRenderer.otpBody(purpose, otp, expiresAt, Instant.now(clock)));
+            templateRenderer.otpBody(purpose, otp, expiresAt, now),
+            templateRenderer.otpBodyHtml(purpose, otp, expiresAt, now));
     }
 }

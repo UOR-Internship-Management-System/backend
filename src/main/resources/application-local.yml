@@ -15,6 +15,19 @@ spring:
     locations: classpath:db/migration
     out-of-order: true
 
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+
 management:
   endpoint:
     health:
