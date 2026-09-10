@@ -49,9 +49,15 @@ import org.springframework.web.multipart.MultipartFile;
 public class AcademicLedgerUploadService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AcademicLedgerUploadService.class);
-    private static final String CSV_CONTENT_TYPE = "text/csv";
     private static final String AUDIT_EVENT = "LEDGER_UPLOAD_ACCEPTED";
+    private static final String AUDIT_DELETE_EVENT = "LEDGER_UPLOAD_DELETED";
     private static final String AUDIT_RESOURCE = "ACADEMIC_LEDGER_UPLOAD";
+
+    private static final Collection<AcademicLedgerUploadStatus> DELETE_BLOCKED_STATUSES =
+            EnumSet.of(
+                    AcademicLedgerUploadStatus.PROCESSING,
+                    AcademicLedgerUploadStatus.COMMITTING,
+                    AcademicLedgerUploadStatus.COMMITTED);
 
     private static final Collection<AcademicLedgerUploadStatus> DUPLICATE_PROTECTED_STATUSES =
             EnumSet.of(
@@ -102,7 +108,7 @@ public class AcademicLedgerUploadService {
                     throw AcademicLedgerErrors.duplicateUpload(existing.getId());
                 });
 
-        String storageKey = newStorageKey();
+        String storageKey = newStorageKey(validated.contentType());
         FileStoragePort.StoredFile storedFile;
         try (InputStream input = file.getInputStream()) {
             storedFile = fileStorage.store(storageKey, input);
@@ -198,6 +204,36 @@ public class AcademicLedgerUploadService {
         return toDetail(upload, asset);
     }
 
+    @Transactional
+    public void deleteUpload(UUID uploadId) {
+        CurrentActor actor = currentAdmin();
+        AcademicLedgerUploadEntity upload = uploadRepository.findByIdForUpdate(uploadId)
+                .orElseThrow(AcademicLedgerErrors::uploadNotFound);
+        if (DELETE_BLOCKED_STATUSES.contains(upload.getUploadStatus())) {
+            throw AcademicLedgerErrors.cannotDelete(upload.getUploadStatus().name());
+        }
+
+        FileAssetEntity asset = fileAssetRepository.findById(upload.getSourceFileAssetId()).orElse(null);
+        String fileName = upload.getFileName();
+
+        uploadRepository.delete(upload);
+        uploadRepository.flush();
+        if (asset != null) {
+            fileAssetRepository.delete(asset);
+            fileAssetRepository.flush();
+            deleteStoredFileQuietly(asset.getStorageKey());
+        }
+
+        auditEventPublisher.recordRequired(
+                actor.userId(),
+                RoleName.ADMIN.name(),
+                AUDIT_DELETE_EVENT,
+                AuditEventCategory.ACADEMIC_LEDGER,
+                AUDIT_RESOURCE,
+                uploadId.toString(),
+                Map.of("uploadId", uploadId.toString(), "fileName", fileName));
+    }
+
     private PersistedAcceptance persistAcceptedUpload(
             CurrentActor actor,
             AcademicLedgerUploadPreflightValidator.ValidatedLedgerFile validated,
@@ -207,7 +243,7 @@ public class AcademicLedgerUploadService {
             asset.setOwnerAccountId(actor.userId());
             asset.setFileName(validated.originalFilename());
             asset.setStorageKey(storageKey);
-            asset.setMimeType(CSV_CONTENT_TYPE);
+            asset.setMimeType(validated.contentType());
             asset.setFileSizeBytes(validated.sizeBytes());
             asset.setChecksumSha256(validated.checksumSha256());
             asset = fileAssetRepository.saveAndFlush(asset);
@@ -370,10 +406,11 @@ public class AcademicLedgerUploadService {
         }
     }
 
-    private String newStorageKey() {
+    private String newStorageKey(String contentType) {
         OffsetDateTime now = OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
-        return "academic-ledger/%04d/%02d/%s.csv".formatted(
-                now.getYear(), now.getMonthValue(), UUID.randomUUID());
+        String extension = AcademicLedgerErrors.XLSX_MEDIA_TYPE.equals(contentType) ? "xlsx" : "csv";
+        return "academic-ledger/%04d/%02d/%s.%s".formatted(
+                now.getYear(), now.getMonthValue(), UUID.randomUUID(), extension);
     }
 
     private record PersistedAcceptance(AcademicLedgerUploadEntity upload, FileAssetEntity asset) {

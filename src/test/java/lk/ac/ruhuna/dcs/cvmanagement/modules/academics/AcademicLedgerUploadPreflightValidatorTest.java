@@ -3,12 +3,16 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.academics;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.error.AcademicLedgerApiException;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application.AcademicLedgerUploadPreflightValidator;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProperties;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -54,6 +58,42 @@ class AcademicLedgerUploadPreflightValidatorTest {
         MockMultipartFile file = new MockMultipartFile("file", "ledger.csv", "text/csv", bytes);
 
         assertThat(boundaryValidator.validate(file).sizeBytes()).isEqualTo(bytes.length);
+    }
+
+    @Test
+    void validCanonicalExcelWorkbookPassesPreflightWithXlsxContentType() throws Exception {
+        byte[] bytes = validXlsx();
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "ledger.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+
+        var result = validator.validate(file);
+
+        assertThat(result.originalFilename()).isEqualTo("ledger.xlsx");
+        assertThat(result.contentType())
+                .isEqualTo("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        assertThat(result.checksumSha256()).isEqualTo(HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(bytes)));
+    }
+
+    @Test
+    void rejectsExcelWorkbookWithInvalidCredits() throws Exception {
+        byte[] bytes;
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Ledger");
+            writeRow(sheet, 0,
+                    "student_index_number", "course_code", "credits", "letter_grade",
+                    "semester", "academic_year", "attempt_number", "result_status");
+            writeRow(sheet, 1, "SC/2025/0001", "CSC1113", "not-a-number", "A", "Semester 1", "2025/2026", "1", "PASSED");
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            bytes = out.toByteArray();
+        }
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "ledger.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", bytes);
+
+        assertLedgerError(file, 422, "LEDGER_PARSE_FAILED");
     }
 
     @Test
@@ -119,6 +159,34 @@ class AcademicLedgerUploadPreflightValidatorTest {
                     assertThat(exception.status().value()).isEqualTo(status);
                     assertThat(exception.code()).isEqualTo(code);
                 });
+    }
+
+    private byte[] validXlsx() throws Exception {
+        try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Ledger");
+            writeRow(sheet, 0,
+                    "student_index_number", "course_code", "credits", "letter_grade",
+                    "semester", "academic_year", "attempt_number", "result_status");
+            Row dataRow = sheet.createRow(1);
+            dataRow.createCell(0).setCellValue("SC/2025/0001");
+            dataRow.createCell(1).setCellValue("CSC1113");
+            dataRow.createCell(2).setCellValue(3.0); // numeric cell, exercises the numeric-cell branch
+            dataRow.createCell(3).setCellValue("A");
+            dataRow.createCell(4).setCellValue("Semester 1");
+            dataRow.createCell(5).setCellValue("2025/2026");
+            dataRow.createCell(6).setCellValue(1.0); // numeric cell
+            dataRow.createCell(7).setCellValue("PASSED");
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    private void writeRow(Sheet sheet, int rowIndex, String... values) {
+        Row row = sheet.createRow(rowIndex);
+        for (int index = 0; index < values.length; index++) {
+            row.createCell(index).setCellValue(values[index]);
+        }
     }
 
     private String validCsv() {

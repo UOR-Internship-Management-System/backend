@@ -58,7 +58,7 @@ class AcademicLedgerProcessingService {
             MessageDigest digest = sha256();
             try (InputStream storedInput = fileStorage.open(asset.getStorageKey());
                     DigestInputStream input = new DigestInputStream(storedInput, digest)) {
-                totalRows = sourceParser.parse(input, properties.stagingBatchSize(), rows -> {
+                totalRows = sourceParser.parse(input, asset.getMimeType(), properties.stagingBatchSize(), rows -> {
                     stagingWriter.write(uploadId, rows);
                     stateService.heartbeatProcessing(uploadId);
                 });

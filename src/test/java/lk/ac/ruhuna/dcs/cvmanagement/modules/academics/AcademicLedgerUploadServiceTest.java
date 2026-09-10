@@ -12,6 +12,7 @@ import java.time.Clock;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileAssetEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileAssetRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.storage.FileStoragePort;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.api.error.AcademicLedgerApiException;
@@ -74,6 +75,71 @@ class AcademicLedgerUploadServiceTest {
                     assertThat(exception.code()).isEqualTo("LEDGER_DUPLICATE_UPLOAD");
                 });
         verify(storage, never()).store(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void deletingAReceivedUploadRemovesTheUploadAssetAndStoredFile() {
+        AcademicLedgerUploadPreflightValidator preflight = mock(AcademicLedgerUploadPreflightValidator.class);
+        AcademicLedgerUploadRepository uploads = mock(AcademicLedgerUploadRepository.class);
+        FileAssetRepository assets = mock(FileAssetRepository.class);
+        FileStoragePort storage = mock(FileStoragePort.class);
+        CurrentActorProvider actors = mock(CurrentActorProvider.class);
+        AuditEventPublisher audit = mock(AuditEventPublisher.class);
+        var service = new AcademicLedgerUploadService(
+                preflight, uploads, assets, storage,
+                new AcademicLedgerProperties(5_242_880L, 2),
+                actors, audit, Clock.systemUTC(), noOpTransactionManager());
+
+        UUID adminId = UUID.randomUUID();
+        UUID uploadId = UUID.randomUUID();
+        UUID assetId = UUID.randomUUID();
+        when(actors.currentActor()).thenReturn(Optional.of(
+                new CurrentActor(adminId, "admin@example.com", Set.of(RoleName.ADMIN))));
+        AcademicLedgerUploadEntity upload = new AcademicLedgerUploadEntity();
+        upload.setId(uploadId);
+        upload.setSourceFileAssetId(assetId);
+        upload.setFileName("ledger.csv");
+        upload.setUploadStatus(AcademicLedgerUploadStatus.RECEIVED);
+        when(uploads.findByIdForUpdate(uploadId)).thenReturn(Optional.of(upload));
+        FileAssetEntity asset = new FileAssetEntity();
+        asset.setStorageKey("academic-ledger/2026/01/some-file.csv");
+        when(assets.findById(assetId)).thenReturn(Optional.of(asset));
+
+        service.deleteUpload(uploadId);
+
+        verify(uploads).delete(upload);
+        verify(assets).delete(asset);
+        verify(storage).delete("academic-ledger/2026/01/some-file.csv");
+    }
+
+    @Test
+    void committedUploadsCannotBeDeleted() {
+        AcademicLedgerUploadPreflightValidator preflight = mock(AcademicLedgerUploadPreflightValidator.class);
+        AcademicLedgerUploadRepository uploads = mock(AcademicLedgerUploadRepository.class);
+        FileAssetRepository assets = mock(FileAssetRepository.class);
+        FileStoragePort storage = mock(FileStoragePort.class);
+        CurrentActorProvider actors = mock(CurrentActorProvider.class);
+        AuditEventPublisher audit = mock(AuditEventPublisher.class);
+        var service = new AcademicLedgerUploadService(
+                preflight, uploads, assets, storage,
+                new AcademicLedgerProperties(5_242_880L, 2),
+                actors, audit, Clock.systemUTC(), noOpTransactionManager());
+
+        UUID adminId = UUID.randomUUID();
+        UUID uploadId = UUID.randomUUID();
+        when(actors.currentActor()).thenReturn(Optional.of(
+                new CurrentActor(adminId, "admin@example.com", Set.of(RoleName.ADMIN))));
+        AcademicLedgerUploadEntity upload = new AcademicLedgerUploadEntity();
+        upload.setId(uploadId);
+        upload.setUploadStatus(AcademicLedgerUploadStatus.COMMITTED);
+        when(uploads.findByIdForUpdate(uploadId)).thenReturn(Optional.of(upload));
+
+        assertThatThrownBy(() -> service.deleteUpload(uploadId))
+                .isInstanceOfSatisfying(AcademicLedgerApiException.class, exception -> {
+                    assertThat(exception.status().value()).isEqualTo(409);
+                    assertThat(exception.code()).isEqualTo("LEDGER_DELETE_NOT_ALLOWED");
+                });
+        verify(uploads, never()).delete(org.mockito.ArgumentMatchers.<AcademicLedgerUploadEntity>any());
     }
 
     private PlatformTransactionManager noOpTransactionManager() {

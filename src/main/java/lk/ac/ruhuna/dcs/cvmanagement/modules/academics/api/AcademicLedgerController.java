@@ -16,8 +16,10 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProp
 import lk.ac.ruhuna.dcs.cvmanagement.shared.api.ApiPaths;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -96,5 +98,11 @@ public class AcademicLedgerController {
     @GetMapping(value = "/{uploadId}/validation-results", produces = MediaType.APPLICATION_JSON_VALUE)
     public AcademicLedgerValidationResultResponse validationResults(@PathVariable UUID uploadId) {
         return reviewService.getValidation(uploadId);
+    }
+
+    @DeleteMapping("/{uploadId}")
+    public ResponseEntity<Void> delete(@PathVariable UUID uploadId) {
+        uploadService.deleteUpload(uploadId);
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
 }
