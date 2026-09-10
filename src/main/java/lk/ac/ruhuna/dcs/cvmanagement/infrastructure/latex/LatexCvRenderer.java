@@ -15,12 +15,14 @@ public class LatexCvRenderer {
 
     public static final String TEMPLATE_VERSION = "ATS-TEMPLATE-V1";
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM uuuu", Locale.ENGLISH);
+    private static final DateTimeFormatter YEAR = DateTimeFormatter.ofPattern("uuuu", Locale.ENGLISH);
 
     public String render(CvDocumentModel model) {
         StringBuilder body = new StringBuilder(4096);
         renderHeader(body, model);
         renderSummary(body, model.profile());
         renderSkills(body, model.declaredSkills());
+        renderEducation(body, model.educationEntries());
         renderExperiences(body, model.experiences());
         renderProjects(body, model.projects());
         renderCertificates(body, model.certificates());
@@ -32,6 +34,9 @@ public class LatexCvRenderer {
                 \\documentclass[10pt,a4paper]{article}
                 \\usepackage[margin=1.55cm]{geometry}
                 \\usepackage{fontspec}
+                \\usepackage{color}
+                \\IfFontExistsTF{Liberation Sans}{\\setmainfont{Liberation Sans}}{}
+                \\definecolor{cvaccent}{rgb}{0.11,0.22,0.37}
                 \\setlength{\\parindent}{0pt}
                 \\setlength{\\parskip}{4pt}
                 \\linespread{1.05}
@@ -40,7 +45,7 @@ public class LatexCvRenderer {
                 \\renewcommand{\\@listI}{\\leftmargin\\leftmargini\\itemsep 1.5pt\\parsep 0pt\\topsep 2pt\\partopsep 0pt}
                 \\let\\@listi\\@listI
                 \\makeatother
-                \\newcommand{\\cvsection}[1]{\\vspace{9pt}{\\bfseries\\large\\MakeUppercase{#1}}\\par\\vspace{1pt}\\hrule height 0.8pt\\vspace{5pt}}
+                \\newcommand{\\cvsection}[1]{\\vspace{9pt}{\\color{cvaccent}\\bfseries\\large\\MakeUppercase{#1}}\\par\\vspace{1pt}{\\color{cvaccent}\\hrule height 0.8pt}\\vspace{5pt}}
                 \\newcommand{\\cvspacer}{\\vspace{7pt}}
                 \\begin{document}
                 %s
@@ -57,21 +62,22 @@ public class LatexCvRenderer {
         if (model.profile() != null && hasText(model.profile().headline())) {
             out.append("\\vspace{1pt}{\\large ").append(escape(model.profile().headline())).append("}\\par\n");
         }
-        out.append("\\vspace{3pt}\n");
+        out.append("\\vspace{4pt}\n");
         String contactLine = joinNonBlank(" | ",
                 model.identity().universityEmail(),
                 model.profile() == null ? null : model.profile().personalEmail(),
-                model.profile() == null ? null : model.profile().phone(),
-                model.profile() == null ? null : model.profile().location());
-        if (hasText(contactLine)) out.append("{\\small ").append(escape(contactLine)).append("}\\par\n");
+                model.profile() == null ? null : model.profile().phone());
         String links = model.contactLinks().stream()
                 .map(link -> joinNonBlank(": ", link.label(), link.url()))
                 .filter(this::hasText)
                 .reduce((a, b) -> a + " | " + b)
                 .orElse("");
-        if (hasText(links)) out.append("{\\small ").append(escape(links)).append("}\\par\n");
+        String contactRow = joinNonBlank(" | ", contactLine, links);
+        if (hasText(contactRow)) out.append("{\\small ").append(escape(contactRow)).append("}\\par\n");
+        String location = model.profile() == null ? null : model.profile().location();
+        if (hasText(location)) out.append("\\vspace{1pt}{\\small ").append(escape(location)).append("}\\par\n");
         out.append("\\end{center}\n");
-        out.append("\\vspace{1pt}\\hrule height 1pt\\vspace{3pt}\n");
+        out.append("\\vspace{2pt}{\\color{cvaccent}\\hrule height 1pt}\\vspace{3pt}\n");
     }
 
     private void renderSummary(StringBuilder out, CvDocumentModel.Profile profile) {
@@ -91,6 +97,18 @@ public class LatexCvRenderer {
                 .reduce((a, b) -> a + ", " + b)
                 .orElse("");
         appendLine(out, joined);
+    }
+
+    private void renderEducation(StringBuilder out, List<CvDocumentModel.Education> items) {
+        if (items.isEmpty()) return;
+        section(out, "Education");
+        for (int i = 0; i < items.size(); i++) {
+            var item = items.get(i);
+            spacer(out, i);
+            entryBlock(out, joinNonBlank(", ", item.degree(), item.institution()),
+                    formatYearRange(item.startDate(), item.endDate(), item.current()), null);
+            metaRow(out, item.resultNote(), item.location());
+        }
     }
 
     private void renderExperiences(StringBuilder out, List<CvDocumentModel.Experience> items) {
@@ -187,6 +205,15 @@ public class LatexCvRenderer {
         out.append("\\par\n");
     }
 
+    /** Renders a plain-weight left value with an italic right-aligned value on the same line. */
+    private void metaRow(StringBuilder out, String left, String right) {
+        if (!hasText(left) && !hasText(right)) return;
+        out.append("\\noindent{}");
+        if (hasText(left)) out.append(escape(left));
+        if (hasText(right)) out.append("\\hfill{\\itshape ").append(escape(right)).append("}");
+        out.append("\\par\n");
+    }
+
     /** Adds breathing room between repeated entries within a section (skipped before the first). */
     private void spacer(StringBuilder out, int index) {
         if (index > 0) out.append("\\cvspacer\n");
@@ -227,6 +254,12 @@ public class LatexCvRenderer {
         }
         if (trimmed.startsWith("\u2022")) return trimmed.substring(1).strip();
         return trimmed;
+    }
+
+    private String formatYearRange(LocalDate start, LocalDate end, boolean current) {
+        String left = start == null ? "" : YEAR.format(start);
+        String right = current ? "Present" : (end == null ? "" : YEAR.format(end));
+        return joinNonBlank(" -- ", left, right);
     }
 
     private String formatRange(LocalDate start, LocalDate end, boolean current) {

@@ -25,6 +25,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.reposito
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.AwardRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.CertificateRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.ContactLinkRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.EducationRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentProfileRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.WorkExperienceRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ class CvSourceQueryServiceTest {
 
     private final StudentProfileRepository profileRepository = mock(StudentProfileRepository.class);
     private final ContactLinkRepository contactRepository = mock(ContactLinkRepository.class);
+    private final EducationRepository educationRepository = mock(EducationRepository.class);
     private final WorkExperienceRepository experienceRepository = mock(WorkExperienceRepository.class);
     private final ProjectRepository projectRepository = mock(ProjectRepository.class);
     private final ProjectSkillRepository projectSkillRepository = mock(ProjectSkillRepository.class);
@@ -43,8 +45,9 @@ class CvSourceQueryServiceTest {
     private final DeclaredSkillRepository skillRepository = mock(DeclaredSkillRepository.class);
     private final StudentAcademicSummaryRepository academicRepository = mock(StudentAcademicSummaryRepository.class);
     private final CvSourceQueryService service = new CvSourceQueryService(
-            profileRepository, contactRepository, experienceRepository, projectRepository, projectSkillRepository,
-            certificateRepository, awardRepository, activityRepository, skillRepository, academicRepository);
+            profileRepository, contactRepository, educationRepository, experienceRepository, projectRepository,
+            projectSkillRepository, certificateRepository, awardRepository, activityRepository, skillRepository,
+            academicRepository);
 
     private StudentEntity student;
 
@@ -58,6 +61,7 @@ class CvSourceQueryServiceTest {
         when(profileRepository.findByStudentId(student.getId())).thenReturn(Optional.empty());
         when(contactRepository.findAllByStudentIdAndCvIncludeTrueOrderByDisplayOrderAscLabelAscIdAsc(student.getId()))
                 .thenReturn(List.of());
+        when(educationRepository.findAllByStudentIdAndCvIncludeTrue(student.getId())).thenReturn(List.of());
         when(skillRepository.findCvSkills(student.getId())).thenReturn(List.of());
         when(academicRepository.findById(student.getId())).thenReturn(Optional.empty());
     }

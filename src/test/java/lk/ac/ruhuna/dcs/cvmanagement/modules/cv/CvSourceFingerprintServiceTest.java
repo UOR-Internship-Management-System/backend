@@ -52,6 +52,7 @@ class CvSourceFingerprintServiceTest {
                 List.of(),
                 List.of(),
                 List.of(),
+                List.of(),
                 null,
                 new CvConfiguration(List.of(), List.of(), List.of(), List.of(), List.of()));
     }

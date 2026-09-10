@@ -47,6 +47,9 @@ class CvLatexRuntimeAcceptanceTest {
                 List.of(),
                 List.of(new CvDocumentModel.DeclaredSkill(
                         UUID.randomUUID(), UUID.randomUUID(), "Java", "ADVANCED", 1, 1L, updatedAt)),
+                List.of(new CvDocumentModel.Education(UUID.randomUUID(), "BSc Computer Science", "University of Ruhuna",
+                        null, "Matara, Sri Lanka", LocalDate.of(2022, 1, 1), null, true, "Current GPA 3.52/4.00",
+                        1L, updatedAt)),
                 List.of(new CvDocumentModel.Experience(UUID.randomUUID(), "Example Labs", "Software Intern",
                         "Matara", LocalDate.of(2026, 1, 1), null, true,
                         "Built REST APIs with Spring Boot.", 1L, updatedAt)),

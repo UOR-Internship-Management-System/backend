@@ -4,12 +4,14 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.Act
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.AwardResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.CertificateResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.ContactLinkResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.EducationResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.StudentProfileResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.WorkExperienceResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.ActivityEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.AwardEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.CertificateEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.ContactLinkEntity;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.EducationEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentProfileEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.WorkExperienceEntity;
@@ -82,6 +84,23 @@ public class StudentProfileMapper {
             entity.getIssuer(),
             entity.getAwardDate(),
             entity.getDescription(),
+            entity.isCvInclude(),
+            entity.getVersion() != null ? entity.getVersion() : 0L,
+            entity.getCreatedAt(),
+            entity.getUpdatedAt());
+    }
+
+    public EducationResponse toResponse(EducationEntity entity) {
+        return new EducationResponse(
+            entity.getId(),
+            entity.getDegree(),
+            entity.getInstitution(),
+            entity.getInstitutionUrl(),
+            entity.getLocation(),
+            entity.getStartDate(),
+            entity.getEndDate(),
+            entity.isCurrent(),
+            entity.getResultNote(),
             entity.isCvInclude(),
             entity.getVersion() != null ? entity.getVersion() : 0L,
             entity.getCreatedAt(),

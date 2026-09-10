@@ -23,6 +23,8 @@ class CvHtmlRendererTest {
                 new CvDocumentModel.Profile(UUID.randomUUID(), null, null, null, "Summary & focus", null, null, 1L, now),
                 List.of(new CvDocumentModel.ContactLink(UUID.randomUUID(), "Portfolio", "javascript:alert(1)", 1, 1L, now)),
                 List.of(new CvDocumentModel.DeclaredSkill(UUID.randomUUID(), UUID.randomUUID(), "Java", "ADVANCED", 1, 1L, now)),
+                List.of(new CvDocumentModel.Education(UUID.randomUUID(), "BSc Computer Science", "University of Ruhuna",
+                        null, null, LocalDate.of(2022, 1, 1), null, true, null, 1L, now)),
                 List.of(new CvDocumentModel.Experience(UUID.randomUUID(), "Acme", "Intern", null,
                         LocalDate.of(2026, 1, 1), null, true, "Backend", 1L, now)),
                 List.of(new CvDocumentModel.Project(UUID.randomUUID(), "Project", "Description", null, null,

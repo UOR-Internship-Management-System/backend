@@ -7,12 +7,14 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.Acti
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.AwardRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.CertificateRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.ContactLinkRequest;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.EducationRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.StudentProfileUpdateRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.WorkExperienceRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.ActivityResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.AwardResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.CertificateResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.ContactLinkResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.EducationResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.StudentProfileResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.WorkExperienceResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.cv.CvSourceArea;
@@ -22,6 +24,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.A
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.AwardEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.CertificateEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.ContactLinkEntity;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.EducationEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentProfileEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.WorkExperienceEntity;
@@ -29,6 +32,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.reposito
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.AwardRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.CertificateRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.ContactLinkRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.EducationRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentProfileRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.WorkExperienceRepository;
@@ -53,6 +57,7 @@ public class StudentProfileService {
     private final StudentRepository studentRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final ContactLinkRepository contactLinkRepository;
+    private final EducationRepository educationRepository;
     private final CertificateRepository certificateRepository;
     private final AwardRepository awardRepository;
     private final ActivityRepository activityRepository;
@@ -66,6 +71,7 @@ public class StudentProfileService {
         StudentRepository studentRepository,
         StudentProfileRepository studentProfileRepository,
         ContactLinkRepository contactLinkRepository,
+        EducationRepository educationRepository,
         CertificateRepository certificateRepository,
         AwardRepository awardRepository,
         ActivityRepository activityRepository,
@@ -77,6 +83,7 @@ public class StudentProfileService {
         this.studentRepository = studentRepository;
         this.studentProfileRepository = studentProfileRepository;
         this.contactLinkRepository = contactLinkRepository;
+        this.educationRepository = educationRepository;
         this.certificateRepository = certificateRepository;
         this.awardRepository = awardRepository;
         this.activityRepository = activityRepository;
@@ -196,6 +203,78 @@ public class StudentProfileService {
             throw new PreconditionFailedException("Contact link has been modified since it was last read.");
         }
         contactLinkRepository.delete(entity);
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
+    }
+
+    // ---- education ----
+
+    @Transactional(readOnly = true)
+    public PagedResponse<EducationResponse> listEducation(String search, Integer page, Integer size, String sort) {
+        UUID studentId = currentStudent().getId();
+        Pageable pageable = PageRequestFactory.build(page, size, sort);
+        String searchPattern = "%" + (search == null ? "" : search.toLowerCase()) + "%";
+        Page<EducationEntity> result = educationRepository.search(studentId, searchPattern, pageable);
+        return PagedResponse.of(result.map(mapper::toResponse), PageRequestFactory.describeSort(sort));
+    }
+
+    @Transactional
+    public EducationResponse createEducation(EducationRequest request) {
+        UUID studentId = currentStudent().getId();
+        EducationEntity entity = new EducationEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setStudentId(studentId);
+        entity.setDegree(request.degree());
+        entity.setInstitution(request.institution());
+        entity.setInstitutionUrl(request.institutionUrl());
+        entity.setLocation(request.location());
+        entity.setStartDate(request.startDate());
+        entity.setEndDate(request.endDate());
+        entity.setCurrent(request.current());
+        entity.setResultNote(request.resultNote());
+        entity.setCvInclude(request.cvInclude() == null || request.cvInclude());
+        OffsetDateTime now = OffsetDateTime.now();
+        entity.setCreatedAt(now);
+        entity.setUpdatedAt(now);
+        EducationEntity saved = educationRepository.save(entity);
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
+        return mapper.toResponse(saved);
+    }
+
+    @Transactional
+    public EducationResponse updateEducation(UUID educationId, EducationRequest request, long ifMatchVersion) {
+        UUID studentId = currentStudent().getId();
+        EducationEntity entity = educationRepository.findById(educationId)
+            .orElseThrow(() -> new NotFoundException("Education entry not found."));
+        assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Education entry has been modified since it was last read.");
+        }
+
+        entity.setDegree(request.degree());
+        entity.setInstitution(request.institution());
+        entity.setInstitutionUrl(request.institutionUrl());
+        entity.setLocation(request.location());
+        entity.setStartDate(request.startDate());
+        entity.setEndDate(request.endDate());
+        entity.setCurrent(request.current());
+        entity.setResultNote(request.resultNote());
+        if (request.cvInclude() != null) entity.setCvInclude(request.cvInclude());
+        entity.setUpdatedAt(OffsetDateTime.now());
+        EducationEntity saved = educationRepository.save(entity);
+        cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
+        return mapper.toResponse(saved);
+    }
+
+    @Transactional
+    public void deleteEducation(UUID educationId, long ifMatchVersion) {
+        UUID studentId = currentStudent().getId();
+        EducationEntity entity = educationRepository.findById(educationId)
+            .orElseThrow(() -> new NotFoundException("Education entry not found."));
+        assertOwnership(entity.getStudentId(), studentId);
+        if (!entity.getVersion().equals(ifMatchVersion)) {
+            throw new PreconditionFailedException("Education entry has been modified since it was last read.");
+        }
+        educationRepository.delete(entity);
         cvFreshnessUpdatePort.markChanged(studentId, CvSourceArea.PROFILE);
     }
 
