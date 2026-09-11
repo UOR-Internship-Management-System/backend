@@ -49,8 +49,11 @@ app:
   email:
     # 'log' writes OTPs to the application log (development only).
     # 'smtp' sends real mail and requires spring.mail.* below.
+    # 'brevo-api' sends real mail over HTTPS via Brevo's REST API (for hosts that block
+    # outbound SMTP ports) and requires BREVO_API_KEY below.
     mode: ${APP_EMAIL_MODE:log}
     from: ${APP_EMAIL_FROM:no-reply@cvmanagement.local}
+    brevo-api-key: ${BREVO_API_KEY:}
 
   files:
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
