@@ -1,6 +1,7 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.academics.application;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
@@ -11,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +23,11 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.academics.config.AcademicLedgerProp
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.http.InvalidMediaTypeException;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -29,7 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * Performs the synchronous, transport-level preflight required before an upload may receive 202.
  *
- * <p>This class intentionally validates only the frozen file/CSV contract and primitive parseability.
+ * <p>This class intentionally validates only the frozen file/row contract and primitive parseability.
  * Student, subject, grade-scale, duplicate-row, and official-record rules belong to asynchronous
  * domain validation in Patch 3.
  */
@@ -64,13 +71,16 @@ public class AcademicLedgerUploadPreflightValidator {
         }
 
         String originalFilename = sanitizeFilename(file.getOriginalFilename());
-        validateFileIdentity(originalFilename, file.getContentType());
+        LedgerFileFormat format = detectFormat(originalFilename, file.getContentType());
 
-        String checksum = parseAndHash(file);
-        return new ValidatedLedgerFile(originalFilename, CSV_MEDIA_TYPE, file.getSize(), checksum);
+        String checksum = format == LedgerFileFormat.EXCEL ? parseAndHashExcel(file) : parseAndHashCsv(file);
+        String contentType = format == LedgerFileFormat.EXCEL
+                ? AcademicLedgerErrors.XLSX_MEDIA_TYPE
+                : CSV_MEDIA_TYPE;
+        return new ValidatedLedgerFile(originalFilename, contentType, file.getSize(), checksum);
     }
 
-    private String parseAndHash(MultipartFile file) {
+    private String parseAndHashCsv(MultipartFile file) {
         MessageDigest digest = sha256();
         var decoder = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT)
@@ -89,7 +99,7 @@ public class AcademicLedgerUploadPreflightValidator {
                 CSVParser parser = format.parse(reader)) {
             validateHeaders(parser.getHeaderNames());
             for (CSVRecord record : parser) {
-                validateRecord(record);
+                validateRecord(new CsvLedgerRow(record));
             }
             return HexFormat.of().formatHex(digest.digest());
         } catch (AcademicLedgerApiException exception) {
@@ -99,13 +109,74 @@ public class AcademicLedgerUploadPreflightValidator {
         }
     }
 
+    private String parseAndHashExcel(MultipartFile file) {
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException exception) {
+            throw AcademicLedgerErrors.parseFailed();
+        }
+
+        String checksum = HexFormat.of().formatHex(sha256().digest(bytes));
+        DataFormatter formatter = new DataFormatter(Locale.ENGLISH);
+        try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
+            Sheet sheet = workbook.getNumberOfSheets() > 0 ? workbook.getSheetAt(0) : null;
+            if (sheet == null) {
+                throw AcademicLedgerErrors.parseFailed();
+            }
+            Row headerRow = sheet.getRow(sheet.getFirstRowNum());
+            validateHeaders(readHeaderRow(headerRow, formatter));
+
+            int lastRow = sheet.getLastRowNum();
+            for (int rowIndex = sheet.getFirstRowNum() + 1; rowIndex <= lastRow; rowIndex++) {
+                Row row = sheet.getRow(rowIndex);
+                if (row == null || isBlankRow(row)) {
+                    continue;
+                }
+                validateRecord(new ExcelLedgerRow(row, cellCount(row), formatter));
+            }
+            return checksum;
+        } catch (AcademicLedgerApiException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw AcademicLedgerErrors.parseFailed();
+        }
+    }
+
+    private List<String> readHeaderRow(Row headerRow, DataFormatter formatter) {
+        if (headerRow == null) {
+            throw AcademicLedgerErrors.parseFailed();
+        }
+        List<String> headers = new ArrayList<>();
+        int lastCell = headerRow.getLastCellNum();
+        for (int index = 0; index < lastCell; index++) {
+            ExcelLedgerRow accessor = new ExcelLedgerRow(headerRow, lastCell, formatter);
+            headers.add(accessor.get(index));
+        }
+        return headers;
+    }
+
+    private int cellCount(Row row) {
+        return Math.max(row.getLastCellNum(), 0);
+    }
+
+    private boolean isBlankRow(Row row) {
+        for (int index = 0; index < row.getLastCellNum(); index++) {
+            var cell = row.getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
+            if (cell != null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void validateHeaders(List<String> actualHeaders) {
         if (!AcademicLedgerErrors.expectedHeaders().equals(actualHeaders)) {
             throw AcademicLedgerErrors.parseFailed();
         }
     }
 
-    private void validateRecord(CSVRecord record) {
+    private void validateRecord(LedgerRow record) {
         if (record.size() != COLUMN_COUNT) {
             throw AcademicLedgerErrors.parseFailed();
         }
@@ -166,16 +237,43 @@ public class AcademicLedgerUploadPreflightValidator {
         return value;
     }
 
-    private void validateFileIdentity(String filename, String contentType) {
-        if (!filename.toLowerCase(Locale.ROOT).endsWith(".csv")) {
-            throw AcademicLedgerErrors.unsupportedMediaType();
+    private LedgerFileFormat detectFormat(String filename, String contentType) {
+        String lowerName = filename.toLowerCase(Locale.ROOT);
+        if (lowerName.endsWith(".xlsx")) {
+            validateExcelContentType(contentType);
+            return LedgerFileFormat.EXCEL;
         }
+        if (lowerName.endsWith(".csv")) {
+            validateCsvContentType(contentType);
+            return LedgerFileFormat.CSV;
+        }
+        throw AcademicLedgerErrors.unsupportedMediaType();
+    }
+
+    private void validateCsvContentType(String contentType) {
         try {
             MediaType mediaType = contentType == null ? null : MediaType.parseMediaType(contentType);
             if (mediaType == null
                     || !"text".equalsIgnoreCase(mediaType.getType())
                     || !"csv".equalsIgnoreCase(mediaType.getSubtype())
                     || (mediaType.getCharset() != null && !StandardCharsets.UTF_8.equals(mediaType.getCharset()))) {
+                throw AcademicLedgerErrors.unsupportedMediaType();
+            }
+        } catch (InvalidMediaTypeException exception) {
+            throw AcademicLedgerErrors.unsupportedMediaType();
+        }
+    }
+
+    private void validateExcelContentType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return;
+        }
+        try {
+            MediaType mediaType = MediaType.parseMediaType(contentType);
+            boolean acceptable = mediaType.isCompatibleWith(MediaType.parseMediaType(
+                            AcademicLedgerErrors.XLSX_MEDIA_TYPE))
+                    || mediaType.isCompatibleWith(MediaType.APPLICATION_OCTET_STREAM);
+            if (!acceptable) {
                 throw AcademicLedgerErrors.unsupportedMediaType();
             }
         } catch (InvalidMediaTypeException exception) {
@@ -202,6 +300,18 @@ public class AcademicLedgerUploadPreflightValidator {
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available in this JVM.", exception);
+        }
+    }
+
+    private record CsvLedgerRow(CSVRecord record) implements LedgerRow {
+        @Override
+        public String get(int index) {
+            return record.get(index);
+        }
+
+        @Override
+        public int size() {
+            return record.size();
         }
     }
 

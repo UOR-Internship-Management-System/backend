@@ -92,7 +92,7 @@ class CvSaveServiceTest {
         configuration = new CvConfiguration(List.of(), List.of(), List.of(), List.of(), List.of());
         document = new CvDocumentModel(
                 new CvDocumentModel.Identity(studentId, "CV Student", "cv.student@dcs.ruh.ac.lk", student.getUpdatedAt()),
-                null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null, configuration);
+                null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null, configuration);
 
         when(actorProvider.currentActor()).thenReturn(Optional.of(
                 new CurrentActor(accountId, "cv.student@dcs.ruh.ac.lk", Set.of(RoleName.STUDENT))));

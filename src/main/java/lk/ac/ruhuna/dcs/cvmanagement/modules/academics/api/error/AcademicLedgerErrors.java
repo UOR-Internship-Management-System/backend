@@ -8,6 +8,9 @@ import org.springframework.http.HttpStatus;
 /** Factory methods for stable Academic Ledger error contracts. */
 public final class AcademicLedgerErrors {
 
+    public static final String XLSX_MEDIA_TYPE =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
     private static final List<String> EXPECTED_HEADERS = List.of(
             "student_index_number",
             "course_code",
@@ -26,7 +29,7 @@ public final class AcademicLedgerErrors {
                 HttpStatus.CONTENT_TOO_LARGE,
                 "LEDGER_FILE_TOO_LARGE",
                 "Academic ledger file is too large",
-                "Upload a CSV file no larger than 5 MiB.",
+                "Upload a CSV or Excel (.xlsx) file no larger than 5 MiB.",
                 Map.of("maxSizeBytes", maxSizeBytes));
     }
 
@@ -35,8 +38,9 @@ public final class AcademicLedgerErrors {
                 HttpStatus.UNSUPPORTED_MEDIA_TYPE,
                 "LEDGER_MEDIA_TYPE_UNSUPPORTED",
                 "Unsupported academic ledger format",
-                "Upload a UTF-8 CSV file with media type text/csv.",
-                Map.of("acceptedMediaType", "text/csv", "acceptedExtension", ".csv"));
+                "Upload a UTF-8 CSV file or an Excel (.xlsx) file.",
+                Map.of("acceptedMediaTypes", List.of("text/csv", XLSX_MEDIA_TYPE),
+                        "acceptedExtensions", List.of(".csv", ".xlsx")));
     }
 
     public static AcademicLedgerApiException parseFailed() {
@@ -44,8 +48,17 @@ public final class AcademicLedgerErrors {
                 HttpStatus.UNPROCESSABLE_CONTENT,
                 "LEDGER_PARSE_FAILED",
                 "Academic ledger could not be parsed",
-                "The CSV header or one or more rows do not match the approved academic-ledger format.",
+                "The header row or one or more rows do not match the approved academic-ledger format.",
                 Map.of("expectedHeaders", EXPECTED_HEADERS));
+    }
+
+    public static AcademicLedgerApiException cannotDelete(String currentStatus) {
+        return new AcademicLedgerApiException(
+                HttpStatus.CONFLICT,
+                "LEDGER_DELETE_NOT_ALLOWED",
+                "Academic ledger upload cannot be removed",
+                "Only uploads that are not committed and not actively processing can be removed.",
+                Map.of("currentStatus", currentStatus));
     }
 
     public static AcademicLedgerApiException duplicateUpload(UUID existingUploadId) {

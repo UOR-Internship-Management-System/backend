@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class CvHtmlRenderer {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("MMM uuuu");
+    private static final DateTimeFormatter YEAR_FORMAT = DateTimeFormatter.ofPattern("uuuu");
 
     public String render(CvDocumentModel model) {
         StringBuilder html = new StringBuilder(4096);
@@ -21,6 +22,7 @@ public class CvHtmlRenderer {
         appendHeader(html, model);
         appendSummary(html, model);
         appendSkills(html, model);
+        appendEducation(html, model);
         appendExperience(html, model);
         appendProjects(html, model);
         appendCertificates(html, model);
@@ -83,6 +85,22 @@ public class CvHtmlRenderer {
                 .append(escape(skill.competencyLevel()))
                 .append("</li>"));
         html.append("</ul></section>");
+    }
+
+    private void appendEducation(StringBuilder html, CvDocumentModel model) {
+        if (model.educationEntries().isEmpty()) return;
+        sectionStart(html, "Education");
+        model.educationEntries().forEach(item -> {
+            html.append("<article><h3>")
+                    .append(escape(item.degree()));
+            if (hasText(item.institution())) html.append(", ").append(escape(item.institution()));
+            html.append("</h3>");
+            String years = educationDateRange(item.startDate(), item.endDate(), item.current());
+            appendMeta(html, years, null);
+            appendMeta(html, item.resultNote(), item.location());
+            html.append("</article>");
+        });
+        html.append("</section>");
     }
 
     private void appendExperience(StringBuilder html, CvDocumentModel model) {
@@ -193,6 +211,15 @@ public class CvHtmlRenderer {
         } catch (URISyntaxException exception) {
             return null;
         }
+    }
+
+    private String educationDateRange(LocalDate start, LocalDate end, boolean current) {
+        if (start == null && end == null && !current) return "";
+        String from = start == null ? "" : YEAR_FORMAT.format(start);
+        String to = current ? "Present" : (end == null ? "" : YEAR_FORMAT.format(end));
+        if (from.isEmpty()) return to;
+        if (to.isEmpty()) return from;
+        return from + " – " + to;
     }
 
     private String dateRange(LocalDate start, LocalDate end, boolean current) {

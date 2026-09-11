@@ -4,9 +4,13 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.api.dto.response.DeclaredSki
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.api.dto.response.IndividualSkillResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.entity.DeclaredSkillEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.skills.persistence.entity.SkillEntity;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.stereotype.Component;
 
 @Component
+@Getter
+@Setter
 public class SkillMapper {
 
     public IndividualSkillResponse toResponse(SkillEntity entity) {

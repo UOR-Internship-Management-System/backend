@@ -12,6 +12,7 @@ public record CvDocumentModel(
         Profile profile,
         List<ContactLink> contactLinks,
         List<DeclaredSkill> declaredSkills,
+        List<Education> educationEntries,
         List<Experience> experiences,
         List<Project> projects,
         List<Certificate> certificates,
@@ -23,6 +24,7 @@ public record CvDocumentModel(
     public CvDocumentModel {
         contactLinks = List.copyOf(contactLinks);
         declaredSkills = List.copyOf(declaredSkills);
+        educationEntries = List.copyOf(educationEntries);
         experiences = List.copyOf(experiences);
         projects = List.copyOf(projects);
         certificates = List.copyOf(certificates);
@@ -52,6 +54,19 @@ public record CvDocumentModel(
             String skillName,
             String competencyLevel,
             Integer displayOrder,
+            Long version,
+            OffsetDateTime updatedAt) {}
+
+    public record Education(
+            UUID id,
+            String degree,
+            String institution,
+            String institutionUrl,
+            String location,
+            LocalDate startDate,
+            LocalDate endDate,
+            boolean current,
+            String resultNote,
             Long version,
             OffsetDateTime updatedAt) {}
 

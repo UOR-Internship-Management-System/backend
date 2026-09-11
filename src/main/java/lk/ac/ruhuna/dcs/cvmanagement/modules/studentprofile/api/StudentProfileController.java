@@ -6,12 +6,14 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.Acti
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.AwardRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.CertificateRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.ContactLinkRequest;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.EducationRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.StudentProfileUpdateRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.request.WorkExperienceRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.ActivityResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.AwardResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.CertificateResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.ContactLinkResponse;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.EducationResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.StudentProfileResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.api.dto.response.WorkExperienceResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.application.StudentProfileService;
@@ -74,6 +76,39 @@ public class StudentProfileController {
         @PathVariable UUID contactLinkId,
         @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
         service.deleteContactLink(contactLinkId, IfMatchSupport.parseVersion(ifMatch));
+        return ResponseEntity.noContent().build();
+    }
+
+    // education
+
+    @GetMapping("/education")
+    public PagedResponse<EducationResponse> listEducation(
+        @RequestParam(required = false) String search,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer size,
+        @RequestParam(required = false) String sort) {
+        return service.listEducation(search, page, size, sort);
+    }
+
+    @PostMapping("/education")
+    @ResponseStatus(HttpStatus.CREATED)
+    public EducationResponse createEducation(@Valid @RequestBody EducationRequest request) {
+        return service.createEducation(request);
+    }
+
+    @PatchMapping("/education/{educationId}")
+    public EducationResponse updateEducation(
+        @PathVariable UUID educationId,
+        @Valid @RequestBody EducationRequest request,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        return service.updateEducation(educationId, request, IfMatchSupport.parseVersion(ifMatch));
+    }
+
+    @DeleteMapping("/education/{educationId}")
+    public ResponseEntity<Void> deleteEducation(
+        @PathVariable UUID educationId,
+        @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch) {
+        service.deleteEducation(educationId, IfMatchSupport.parseVersion(ifMatch));
         return ResponseEntity.noContent().build();
     }
 

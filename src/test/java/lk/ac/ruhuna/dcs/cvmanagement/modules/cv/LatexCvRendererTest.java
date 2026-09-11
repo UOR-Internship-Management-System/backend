@@ -23,6 +23,7 @@ class LatexCvRendererTest {
                 new CvDocumentModel.Profile(UUID.randomUUID(), null, null, "Java % Developer", "Uses {Spring} & SQL", null, null, 1L, now),
                 List.of(),
                 List.of(new CvDocumentModel.DeclaredSkill(UUID.randomUUID(), UUID.randomUUID(), "Java", "ADVANCED", 1, 1L, now)),
+                List.of(),
                 List.of(), List.of(), List.of(), List.of(), List.of(), null,
                 new CvConfiguration(List.of(), List.of(), List.of(), List.of(), List.of()));
 

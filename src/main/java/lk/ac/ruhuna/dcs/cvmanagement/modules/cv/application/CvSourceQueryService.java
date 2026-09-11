@@ -23,6 +23,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.A
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.AwardEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.CertificateEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.ContactLinkEntity;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.EducationEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.StudentProfileEntity;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.entity.WorkExperienceEntity;
@@ -30,6 +31,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.reposito
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.AwardRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.CertificateRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.ContactLinkRepository;
+import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.EducationRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.StudentProfileRepository;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.studentprofile.persistence.repository.WorkExperienceRepository;
 import org.springframework.stereotype.Service;
@@ -49,6 +51,7 @@ public class CvSourceQueryService {
 
     private final StudentProfileRepository profileRepository;
     private final ContactLinkRepository contactLinkRepository;
+    private final EducationRepository educationRepository;
     private final WorkExperienceRepository experienceRepository;
     private final ProjectRepository projectRepository;
     private final ProjectSkillRepository projectSkillRepository;
@@ -61,6 +64,7 @@ public class CvSourceQueryService {
     public CvSourceQueryService(
             StudentProfileRepository profileRepository,
             ContactLinkRepository contactLinkRepository,
+            EducationRepository educationRepository,
             WorkExperienceRepository experienceRepository,
             ProjectRepository projectRepository,
             ProjectSkillRepository projectSkillRepository,
@@ -71,6 +75,7 @@ public class CvSourceQueryService {
             StudentAcademicSummaryRepository academicSummaryRepository) {
         this.profileRepository = profileRepository;
         this.contactLinkRepository = contactLinkRepository;
+        this.educationRepository = educationRepository;
         this.experienceRepository = experienceRepository;
         this.projectRepository = projectRepository;
         this.projectSkillRepository = projectSkillRepository;
@@ -87,6 +92,8 @@ public class CvSourceQueryService {
 
         List<ContactLinkEntity> contactLinks = contactLinkRepository
                 .findAllByStudentIdAndCvIncludeTrueOrderByDisplayOrderAscLabelAscIdAsc(studentId);
+        List<EducationEntity> education = new ArrayList<>(
+                educationRepository.findAllByStudentIdAndCvIncludeTrue(studentId));
         List<WorkExperienceEntity> experiences = validatedSelection(
                 configuration.includedExperienceIds(),
                 ids -> experienceRepository.findAllByStudentIdAndIdIn(studentId, ids),
@@ -108,6 +115,12 @@ public class CvSourceQueryService {
                 ids -> activityRepository.findAllByStudentIdAndIdIn(studentId, ids),
                 ActivityEntity::getId);
 
+        education.sort(Comparator
+                .comparing((EducationEntity item) -> item.isCurrent()).reversed()
+                .thenComparing(EducationEntity::getEndDate, DATE_DESC)
+                .thenComparing(EducationEntity::getStartDate, DATE_DESC)
+                .thenComparing(EducationEntity::getDegree, TEXT_ORDER)
+                .thenComparing(item -> item.getId().toString()));
         experiences.sort(Comparator
                 .comparing(WorkExperienceEntity::isCurrentRole).reversed()
                 .thenComparing(WorkExperienceEntity::getStartDate, DATE_DESC)
@@ -159,6 +172,7 @@ public class CvSourceQueryService {
                 toProfile(profile),
                 contactLinks.stream().map(this::toContactLink).toList(),
                 skills,
+                education.stream().map(this::toEducation).toList(),
                 experiences.stream().map(this::toExperience).toList(),
                 projects.stream().map(project -> toProject(project, projectSkills.getOrDefault(project.getId(), List.of()))).toList(),
                 certificates.stream().map(this::toCertificate).toList(),
@@ -209,6 +223,13 @@ public class CvSourceQueryService {
     private CvDocumentModel.ContactLink toContactLink(ContactLinkEntity item) {
         return new CvDocumentModel.ContactLink(
                 item.getId(), item.getLabel(), item.getUrl(), item.getDisplayOrder(), item.getVersion(), item.getUpdatedAt());
+    }
+
+    private CvDocumentModel.Education toEducation(EducationEntity item) {
+        return new CvDocumentModel.Education(
+                item.getId(), item.getDegree(), item.getInstitution(), item.getInstitutionUrl(), item.getLocation(),
+                item.getStartDate(), item.getEndDate(), item.isCurrent(), item.getResultNote(),
+                item.getVersion(), item.getUpdatedAt());
     }
 
     private CvDocumentModel.Experience toExperience(WorkExperienceEntity item) {

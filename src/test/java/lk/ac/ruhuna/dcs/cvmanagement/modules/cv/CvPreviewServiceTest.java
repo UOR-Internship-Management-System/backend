@@ -75,7 +75,7 @@ class CvPreviewServiceTest {
 
         CvDocumentModel document = new CvDocumentModel(
                 new CvDocumentModel.Identity(studentId, "Student", "student@ruh.ac.lk", student.getUpdatedAt()),
-                null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null,
+                null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null,
                 new CvConfiguration(List.of(experienceId), List.of(), List.of(), List.of(), List.of()));
         byte[] pdf = "%PDF-1.7\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
         when(sourceQuery.load(any(), any())).thenReturn(document);
@@ -141,7 +141,7 @@ class CvPreviewServiceTest {
         CvConfiguration configuration = new CvConfiguration(List.of(), List.of(), List.of(), List.of(), List.of());
         CvDocumentModel document = new CvDocumentModel(
                 new CvDocumentModel.Identity(studentId, "Student", "student@ruh.ac.lk", student.getUpdatedAt()),
-                null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null, configuration);
+                null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null, configuration);
         when(sourceQuery.load(any(), any())).thenReturn(document);
         when(fingerprints.fingerprint(document)).thenReturn("a".repeat(64));
         when(htmlRenderer.render(document)).thenReturn("<div>preview</div>");

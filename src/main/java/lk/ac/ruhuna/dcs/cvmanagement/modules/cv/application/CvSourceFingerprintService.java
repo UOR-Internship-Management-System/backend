@@ -35,6 +35,12 @@ public class CvSourceFingerprintService {
             writer.value(skill.competencyLevel()); writer.value(skill.displayOrder()); writer.value(skill.version());
             writer.value(skill.updatedAt());
         });
+        model.educationEntries().forEach(item -> {
+            writer.value(item.id()); writer.value(item.degree()); writer.value(item.institution());
+            writer.value(item.institutionUrl()); writer.value(item.location()); writer.value(item.startDate());
+            writer.value(item.endDate()); writer.value(item.current()); writer.value(item.resultNote());
+            writer.value(item.version()); writer.value(item.updatedAt());
+        });
         model.experiences().forEach(item -> {
             writer.value(item.id()); writer.value(item.organization()); writer.value(item.positionTitle()); writer.value(item.location());
             writer.value(item.startDate()); writer.value(item.endDate()); writer.value(item.currentRole()); writer.value(item.description());

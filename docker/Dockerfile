@@ -20,6 +20,7 @@ RUN apt-get update \
         texlive-xetex \
         texlive-latex-base \
         fonts-lmodern \
+        fonts-liberation \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system appgroup \
     && useradd --system --gid appgroup --home-dir /app --shell /usr/sbin/nologin appuser

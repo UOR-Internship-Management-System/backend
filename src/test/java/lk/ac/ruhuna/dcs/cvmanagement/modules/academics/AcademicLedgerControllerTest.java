@@ -2,6 +2,7 @@ package lk.ac.ruhuna.dcs.cvmanagement.modules.academics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
@@ -73,5 +74,20 @@ class AcademicLedgerControllerTest {
         var response = controller.commit(uploadId, new AcademicLedgerCommitRequest(true));
 
         assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void deleteDelegatesToServiceAndReturnsNoContent() {
+        AcademicLedgerUploadService service = mock(AcademicLedgerUploadService.class);
+        AcademicLedgerReviewService reviewService = mock(AcademicLedgerReviewService.class);
+        AcademicLedgerCommitService commitService = mock(AcademicLedgerCommitService.class);
+        AcademicLedgerController controller = new AcademicLedgerController(
+                service, commitService, reviewService, new AcademicLedgerProperties(5_242_880L, 2));
+        UUID uploadId = UUID.randomUUID();
+
+        var response = controller.delete(uploadId);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        verify(service).deleteUpload(uploadId);
     }
 }
