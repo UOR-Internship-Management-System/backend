@@ -2,17 +2,18 @@ package lk.ac.ruhuna.dcs.cvmanagement.infrastructure.email;
 
 import java.time.Clock;
 import java.time.Instant;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
 /**
- * Delivers OTP codes over SMTP.
+ * Delivers OTP codes through whichever {@link EmailSender} transport is active.
  *
- * <p>Active only when {@code app.email.mode=smtp}; otherwise {@link LoggingOtpEmailSender} is the
- * sole {@link OtpEmailSender} bean.
+ * <p>Active when {@code app.email.mode} is {@code smtp} or {@code brevo-api}; otherwise
+ * {@link LoggingOtpEmailSender} is the sole {@link OtpEmailSender} bean.
  */
 @Component
-@ConditionalOnProperty(name = "app.email.mode", havingValue = "smtp")
+@ConditionalOnExpression(
+    "'${app.email.mode:log}' == 'smtp' or '${app.email.mode:log}' == 'brevo-api'")
 public class SmtpOtpEmailSender implements OtpEmailSender {
 
     private final EmailSender emailSender;
