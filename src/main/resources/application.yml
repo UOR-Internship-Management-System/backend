@@ -44,6 +44,8 @@ management:
   health:
     db:
       enabled: true
+    mail:
+      enabled: false
 
 app:
   email:
