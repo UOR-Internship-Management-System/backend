@@ -1,0 +1,340 @@
+{
+  "info": {
+    "_postman_id": "b88d5851-88a8-41b6-8d20-b45e8d2bab2b",
+    "name": "BMD-010 Candidate Filtering Acceptance",
+    "description": "Real-backend deterministic Candidate Filtering acceptance. Credentials and fixture IDs are supplied only through the ignored local environment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "adminToken", "value": "" },
+    { "key": "studentToken", "value": "" },
+    { "key": "runId", "value": "" },
+    { "key": "stableCandidateIds", "value": "[]" }
+  ],
+  "item": [
+    {
+      "name": "00 - Authentication and preflight",
+      "item": [
+        {
+          "name": "01 Admin login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{adminEmail}}\",\"password\":\"{{adminPassword}}\"}" },
+            "url": "{{baseUrl}}/auth/admin/login"
+          },
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": ["['adminToken','studentToken','runId'].forEach(k => pm.collectionVariables.unset(k));"] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('Admin login returns 200', () => pm.response.to.have.status(200));",
+              "const body=pm.response.json(); pm.collectionVariables.set('adminToken', body.accessToken);",
+              "pm.test('Authenticated account has ADMIN role', () => { pm.expect(body.accessToken).to.be.a('string').and.not.empty; pm.expect(body.user.roles).to.include('ADMIN'); });"
+            ] } }
+          ]
+        },
+        {
+          "name": "02 Student login",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"{{studentEmail}}\",\"password\":\"{{studentPassword}}\"}" },
+            "url": "{{baseUrl}}/auth/student/login"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Student login returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json(); pm.collectionVariables.set('studentToken', body.accessToken);",
+            "pm.test('Authenticated account has STUDENT role only', () => { pm.expect(body.user.roles).to.include('STUDENT'); pm.expect(body.user.roles).to.not.include('ADMIN'); });"
+          ] } }]
+        },
+        {
+          "name": "03 Fixture preflight",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/internship-requests/{{requestId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Fixture Internship Request exists', () => pm.response.to.have.status(200));",
+            "const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;",
+            "['requestId','requestSkillId','additionalSkillId'].forEach(k => pm.test(`${k} is configured as UUID`, () => pm.expect(pm.environment.get(k)).to.match(uuid)));",
+            "pm.test('Skill fixtures are distinct', () => pm.expect(pm.environment.get('requestSkillId')).to.not.eql(pm.environment.get('additionalSkillId')));",
+            "['minimumGpa','maximumGpa','boundaryGpa'].forEach(k => pm.test(`${k} is between 0 and 4`, () => { const n=Number(pm.environment.get(k)); pm.expect(n).to.be.at.least(0).and.at.most(4); }));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "01 - Basic immutable run lifecycle",
+      "item": [
+        {
+          "name": "01 Create Unfiltered Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":null,\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Run creation returns 201', () => pm.response.to.have.status(201));",
+            "const body=pm.response.json(); pm.collectionVariables.set('runId', body.filterRunId);",
+            "pm.test('Location identifies immutable run', () => pm.expect(pm.response.headers.get('Location')).to.include(body.filterRunId));",
+            "pm.test('Unfiltered criteria persist exactly', () => { pm.expect(body.criteria.requestId).to.eql(pm.environment.get('requestId')); pm.expect(body.criteria.runtimeGpaLowerBound).to.eql(null); pm.expect(body.criteria.runtimeGpaUpperBound).to.eql(null); pm.expect(body.criteria.requestSkillIds).to.eql([]); pm.expect(body.criteria.additionalSkillIds).to.eql([]); pm.expect(body.criteria.skillMatchMode).to.eql('OR'); });",
+            "pm.test('Removed scoring fields are absent', () => ['score','rank','matchPercentage','recommendation','weightedScore'].forEach(k => pm.expect(body).to.not.have.property(k)));"
+          ] } }]
+        },
+        {
+          "name": "02 Get Persisted Run",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Run retrieval returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json();",
+            "pm.test('Run ID and request are stable', () => { pm.expect(body.filterRunId).to.eql(pm.collectionVariables.get('runId')); pm.expect(body.request.requestId).to.eql(pm.environment.get('requestId')); pm.expect(body.candidateCount).to.be.at.least(0); });"
+          ] } }]
+        },
+        {
+          "name": "03 List Base Candidates",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=5&sort=officialGpa,desc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Candidate page returns 200', () => pm.response.to.have.status(200));",
+            "const body=pm.response.json();",
+            "pm.test('Page metadata is bounded and consistent', () => { pm.expect(body.items).to.be.an('array'); pm.expect(body.page.page).to.eql(0); pm.expect(body.page.size).to.eql(5); pm.expect(body.page.totalElements).to.be.at.least(body.items.length); pm.expect(body.page.sort).to.eql('officialGpa,desc'); });",
+            "pm.test('Authoritative enrichment is internally consistent', () => body.items.forEach(c => { pm.expect(c.hasLatestSavedCv).to.be.a('boolean'); pm.expect(c.hasExistingActiveShortlist).to.eql(c.existingActiveShortlistCount > 0); }));",
+            "pm.test('Candidate rows contain no scoring output', () => body.items.forEach(c => ['score','rank','matchPercentage','recommendation','weightedScore'].forEach(k => pm.expect(c).to.not.have.property(k))));",
+            "pm.collectionVariables.set('stableCandidateIds', JSON.stringify(body.items.map(c => c.studentId)));"
+          ] } }]
+        },
+        {
+          "name": "04 Verify Stable Repeated Order",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=5&sort=officialGpa,desc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('Repeated page returns 200', () => pm.response.to.have.status(200));",
+            "const ids=pm.response.json().items.map(c => c.studentId);",
+            "pm.test('Unchanged data produces stable order', () => pm.expect(ids).to.eql(JSON.parse(pm.collectionVariables.get('stableCandidateIds'))));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "02 - Inclusive GPA criteria",
+      "item": [
+        {
+          "name": "01 Create Minimum GPA Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":{{minimumGpa}},\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Minimum run returns 201', () => pm.response.to.have.status(201));", "const body=pm.response.json(); pm.collectionVariables.set('runId', body.filterRunId); pm.test('Minimum persisted', () => pm.expect(Number(body.criteria.runtimeGpaLowerBound)).to.eql(Number(pm.environment.get('minimumGpa'))));"] } }]
+        },
+        {
+          "name": "02 Verify Inclusive Minimum",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Minimum candidate query returns 200', () => pm.response.to.have.status(200));", "const min=Number(pm.environment.get('minimumGpa')); const body=pm.response.json(); pm.test('Every result has available GPA at or above inclusive minimum', () => body.items.forEach(c => { pm.expect(c.gpaAvailabilityStatus).to.eql('AVAILABLE'); pm.expect(Number(c.officialGpa)).to.be.at.least(min); }));"] } }]
+        },
+        {
+          "name": "03 Create Maximum GPA Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":null,\"runtimeGpaUpperBound\":{{maximumGpa}},\"requestSkillIds\":[],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Maximum run returns 201', () => pm.response.to.have.status(201));", "const body=pm.response.json(); pm.collectionVariables.set('runId', body.filterRunId);"] } }]
+        },
+        {
+          "name": "04 Verify Inclusive Maximum",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Maximum candidate query returns 200', () => pm.response.to.have.status(200));", "const max=Number(pm.environment.get('maximumGpa')); const body=pm.response.json(); pm.test('Every result has available GPA at or below inclusive maximum', () => body.items.forEach(c => { pm.expect(c.gpaAvailabilityStatus).to.eql('AVAILABLE'); pm.expect(Number(c.officialGpa)).to.be.at.most(max); }));"] } }]
+        },
+        {
+          "name": "05 Create GPA Range Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":{{minimumGpa}},\"runtimeGpaUpperBound\":{{maximumGpa}},\"requestSkillIds\":[],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Range run returns 201', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('runId', pm.response.json().filterRunId);"] } }]
+        },
+        {
+          "name": "06 Verify Inclusive Range",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Range query returns 200', () => pm.response.to.have.status(200));", "const min=Number(pm.environment.get('minimumGpa')); const max=Number(pm.environment.get('maximumGpa')); pm.test('Every GPA is inside inclusive range', () => pm.response.json().items.forEach(c => { pm.expect(Number(c.officialGpa)).to.be.at.least(min); pm.expect(Number(c.officialGpa)).to.be.at.most(max); }));"] } }]
+        },
+        {
+          "name": "07 Create Equal-Boundary Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":{{boundaryGpa}},\"runtimeGpaUpperBound\":{{boundaryGpa}},\"requestSkillIds\":[],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Equal boundary run returns 201', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('runId', pm.response.json().filterRunId);"] } }]
+        },
+        {
+          "name": "08 Verify Equal Boundary",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Boundary query returns 200', () => pm.response.to.have.status(200));", "const boundary=Number(pm.environment.get('boundaryGpa')); pm.test('Every returned GPA equals the boundary', () => pm.response.json().items.forEach(c => pm.expect(Number(c.officialGpa)).to.eql(boundary)));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "03 - Declared skill matching",
+      "item": [
+        {
+          "name": "01 Create AND Skill Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":null,\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[\"{{requestSkillId}}\"],\"additionalSkillIds\":[\"{{additionalSkillId}}\"],\"skillMatchMode\":\"AND\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('AND run returns 201', () => pm.response.to.have.status(201));", "const body=pm.response.json(); pm.collectionVariables.set('runId', body.filterRunId); pm.test('AND criteria persisted', () => pm.expect(body.criteria.skillMatchMode).to.eql('AND'));"] } }]
+        },
+        {
+          "name": "02 Verify AND Skill Results",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('AND query returns 200', () => pm.response.to.have.status(200));", "const expected=[pm.environment.get('requestSkillId'),pm.environment.get('additionalSkillId')].sort(); pm.test('Every AND result matches both skills', () => pm.response.json().items.forEach(c => pm.expect(c.matchingDeclaredSkills.map(s=>s.skillId).sort()).to.include.members(expected)));"] } }]
+        },
+        {
+          "name": "03 Create OR Skill Run",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":null,\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[\"{{requestSkillId}}\"],\"additionalSkillIds\":[\"{{additionalSkillId}}\"],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('OR run returns 201', () => pm.response.to.have.status(201));", "pm.collectionVariables.set('runId', pm.response.json().filterRunId);"] } }]
+        },
+        {
+          "name": "04 Verify OR Skill Results",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('OR query returns 200', () => pm.response.to.have.status(200));", "const selected=new Set([pm.environment.get('requestSkillId'),pm.environment.get('additionalSkillId')]); pm.test('Every OR result matches at least one selected skill', () => pm.response.json().items.forEach(c => pm.expect(c.matchingDeclaredSkills.some(s=>selected.has(s.skillId))).to.eql(true)));"] } }]
+        }
+      ]
+    },
+    {
+      "name": "04 - Candidate list behavior",
+      "item": [
+        {
+          "name": "01 Search by Name or Index",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=20&search={{knownCandidateSearch}}&sort=fullName,asc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Search returns 200', () => pm.response.to.have.status(200));", "const q=pm.environment.get('knownCandidateSearch').toLowerCase(); const body=pm.response.json(); pm.test('Search fixture returns at least one matching row', () => { pm.expect(body.items.length).to.be.above(0); body.items.forEach(c => pm.expect(`${c.fullName} ${c.indexNumber}`.toLowerCase()).to.include(q)); });"] } }]
+        },
+        {
+          "name": "02 Sort Official GPA Ascending",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100&sort=officialGpa,asc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('GPA ascending returns 200', () => pm.response.to.have.status(200));", "const values=pm.response.json().items.filter(c=>c.officialGpa!==null).map(c=>Number(c.officialGpa)); pm.test('Available GPA values ascend', () => pm.expect(values).to.eql([...values].sort((a,b)=>a-b)));"] } }]
+        },
+        {
+          "name": "03 Sort Name Ascending",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100&sort=fullName,asc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Name sort returns 200', () => pm.response.to.have.status(200));", "const names=pm.response.json().items.map(c=>c.fullName); pm.test('Names ascend', () => pm.expect(names).to.eql([...names].sort((a,b)=>a.localeCompare(b))));"] } }]
+        },
+        {
+          "name": "04 Sort Index Ascending",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=100&sort=indexNumber,asc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Index sort returns 200', () => pm.response.to.have.status(200));", "const values=pm.response.json().items.map(c=>c.indexNumber); pm.test('Index numbers ascend', () => pm.expect(values).to.eql([...values].sort((a,b)=>a.localeCompare(b))));"] } }]
+        },
+        {
+          "name": "05 No-Match Search",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=0&size=20&search=__NO_SUCH_CANDIDATE_9f67__" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('No-match search returns 200', () => pm.response.to.have.status(200));", "const body=pm.response.json(); pm.test('No-match page is empty', () => { pm.expect(body.items).to.eql([]); pm.expect(body.page.totalElements).to.eql(0); });"] } }]
+        }
+      ]
+    },
+    {
+      "name": "05 - Security and errors",
+      "item": [
+        {
+          "name": "01 Reject Anonymous Access",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Anonymous access returns 401', () => pm.response.to.have.status(401));"] } }]
+        },
+        {
+          "name": "02 Reject Student Access",
+          "request": { "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{studentToken}}", "type": "string" }] }, "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Student access returns 403', () => pm.response.to.have.status(403));"] } }]
+        },
+        {
+          "name": "03 Reject Unknown Internship Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{unknownRequestId}}\",\"runtimeGpaLowerBound\":null,\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unknown request returns 404', () => pm.response.to.have.status(404));"] } }]
+        },
+        {
+          "name": "04 Reject Unknown Run",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{unknownRunId}}" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unknown run returns 404', () => pm.response.to.have.status(404));"] } }]
+        },
+        {
+          "name": "05 Reject Reversed GPA Bounds",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":3.50,\"runtimeGpaUpperBound\":3.00,\"requestSkillIds\":[],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Reversed bounds return 422', () => pm.response.to.have.status(422));"] } }]
+        },
+        {
+          "name": "06 Reject Out-of-Range GPA",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":4.50,\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Out-of-range GPA returns 400', () => pm.response.to.have.status(400));"] } }]
+        },
+        {
+          "name": "07 Reject Request Skill Not Owned by Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":null,\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[\"{{additionalSkillId}}\"],\"additionalSkillIds\":[],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unowned request Skill returns 422', () => pm.response.to.have.status(422));"] } }]
+        },
+        {
+          "name": "08 Reject Unknown Skill",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":null,\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[],\"additionalSkillIds\":[\"{{inactiveOrUnknownSkillId}}\"],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Unknown or inactive Skill returns 422', () => pm.response.to.have.status(422));"] } }]
+        },
+        {
+          "name": "09 Reject Overlapping Skill Lists",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"requestId\":\"{{requestId}}\",\"runtimeGpaLowerBound\":null,\"runtimeGpaUpperBound\":null,\"requestSkillIds\":[\"{{requestSkillId}}\"],\"additionalSkillIds\":[\"{{requestSkillId}}\"],\"skillMatchMode\":\"OR\"}" },
+            "url": "{{baseUrl}}/admin/candidate-filtering/runs"
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Overlapping Skill lists return 422', () => pm.response.to.have.status(422));"] } }]
+        },
+        {
+          "name": "10 Reject Invalid Pagination",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?page=-1&size=101" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Invalid pagination returns 400', () => pm.response.to.have.status(400));"] } }]
+        },
+        {
+          "name": "11 Reject Invalid Sort",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/candidate-filtering/runs/{{runId}}/candidates?sort=score,desc" },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('Removed score sort returns 400', () => pm.response.to.have.status(400));"] } }]
+        }
+      ]
+    }
+  ]
+}

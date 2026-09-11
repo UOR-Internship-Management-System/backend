@@ -1,8 +1,14 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response;
 
-/**
- * Reserved API response DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class CvFreshnessResponse {
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
+
+public record CvFreshnessResponse(
+    String status,
+    List<String> changedAreas,
+    UUID cvId,
+    OffsetDateTime savedAt,
+    OffsetDateTime evaluatedAt,
+    String message) {
 }

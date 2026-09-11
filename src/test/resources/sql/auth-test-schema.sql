@@ -72,6 +72,8 @@ CREATE TABLE audit_events (
     actor_role VARCHAR(50),
     event_type VARCHAR(100) NOT NULL,
     event_category VARCHAR(50) NOT NULL,
+    outcome VARCHAR(32) NOT NULL DEFAULT 'SUCCEEDED',
+    severity VARCHAR(32),
     resource_type VARCHAR(100),
     resource_id VARCHAR(100),
     metadata VARCHAR(2000),
@@ -87,7 +89,7 @@ INSERT INTO eligible_students (
     id, index_number, university_email, full_name, academic_level, is_active
 ) VALUES (
     '20000000-0000-0000-0000-000000000001',
-    'SC-2020-001',
+    'SC/2020/00001',
     'sc2020001@dcs.ruh.ac.lk',
     'Nimal Perera',
     3,

@@ -2,12 +2,16 @@ package lk.ac.ruhuna.dcs.cvmanagement.config;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -28,12 +32,130 @@ class SecuritySmokeTest {
     @Test
     void protectedStudentPatternIsNotPublic() throws Exception {
         mockMvc.perform(get("/api/v1/student/profile"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
     void protectedAdminPatternIsNotPublic() throws Exception {
         mockMvc.perform(get("/api/v1/admin/dashboard"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void academicLedgerAdminRoutesRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/academic-ledger/uploads"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/academic-records"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    void studentRoleCannotAccessAcademicLedgerAdminRoutes() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/academic-ledger/uploads"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/academic-records"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void companyAdminRoutesRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/companies"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void candidateFilteringAdminRoutesRequireAuthentication() throws Exception {
+        String runId = "95000000-0000-4000-8000-000000000003";
+
+        mockMvc.perform(get("/api/v1/admin/candidate-filtering/runs/{filterRunId}", runId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/candidate-filtering/runs/{filterRunId}/candidates", runId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/v1/admin/candidate-filtering/runs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    void studentRoleCannotAccessCandidateFilteringAdminRoutes() throws Exception {
+        String runId = "95000000-0000-4000-8000-000000000003";
+
+        mockMvc.perform(get("/api/v1/admin/candidate-filtering/runs/{filterRunId}", runId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/candidate-filtering/runs/{filterRunId}/candidates", runId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/candidate-filtering/runs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void studentProjectRoutesRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/me/projects"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminRoleCannotManageStudentProjects() throws Exception {
+        mockMvc.perform(get("/api/v1/me/projects"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    void studentRoleCannotAccessCompanyAdminRoutes() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/companies"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void malformedAdminStudentIdentifierReturnsProblemDetails() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/students/not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void adminStudentInspectionRoutesRequireAuthentication() throws Exception {
+        String studentId = "40000000-0000-4000-8000-000000000001";
+        mockMvc.perform(get("/api/v1/admin/students")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/declared-skills", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/projects", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/academic-records", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/latest-cv", studentId))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/latest-cv/download", studentId))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "STUDENT")
+    void studentRoleCannotAccessAdminStudentInspectionRoutes() throws Exception {
+        String studentId = "40000000-0000-4000-8000-000000000001";
+        mockMvc.perform(get("/api/v1/admin/students")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/declared-skills", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/projects", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/academic-records", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/latest-cv", studentId))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/students/{studentId}/latest-cv/download", studentId))
                 .andExpect(status().isForbidden());
     }
 

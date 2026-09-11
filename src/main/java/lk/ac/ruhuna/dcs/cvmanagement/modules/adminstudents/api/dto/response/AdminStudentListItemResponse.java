@@ -1,8 +1,16 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.adminstudents.api.dto.response;
 
-/**
- * Reserved API response DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class AdminStudentListItemResponse {
+import java.math.BigDecimal;
+import java.util.UUID;
+
+/** Read-only registered-Student roster item matching OpenAPI StudentSummaryResponse. */
+public record AdminStudentListItemResponse(
+        UUID studentId,
+        String indexNumber,
+        String fullName,
+        String universityEmail,
+        String degreeProgram,
+        String academicBatch,
+        int currentLevel,
+        BigDecimal officialGpa) {
 }

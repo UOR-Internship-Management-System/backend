@@ -7,6 +7,12 @@ spring:
     time-zone: UTC
   datasource:
     driver-class-name: org.postgresql.Driver
+  servlet:
+    multipart:
+      # Keep the framework ceiling slightly above the frozen 5 MiB domain limit so the
+      # application can return the Academic Ledger-specific 413 contract at 5 MiB.
+      max-file-size: 6MB
+      max-request-size: 7MB
   jpa:
     open-in-view: false
     hibernate:
@@ -39,6 +45,23 @@ management:
       enabled: true
 
 app:
+  email:
+    # 'log' writes OTPs to the application log (development only).
+    # 'smtp' sends real mail and requires spring.mail.* below.
+    mode: ${APP_EMAIL_MODE:log}
+    from: ${APP_EMAIL_FROM:no-reply@cvmanagement.local}
+
+  files:
+    public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+    profile-photo:
+      allowed-mime-types: [ image/jpeg, image/png ]
+      allowed-extensions: [ ".jpg", ".jpeg", ".png" ]
+      max-size-bytes: 2000000
+    certificate-evidence:
+      allowed-mime-types: [ application/pdf, image/jpeg, image/png ]
+      allowed-extensions: [ ".pdf", ".jpg", ".jpeg", ".png" ]
+      max-size-bytes: 5000000
+
   auth:
     otp:
       length: ${APP_AUTH_OTP_LENGTH:6}
@@ -46,6 +69,43 @@ app:
       max-attempts: ${APP_AUTH_OTP_MAX_ATTEMPTS:3}
       resend-cooldown: ${APP_AUTH_OTP_RESEND_COOLDOWN:PT60S}
       max-resends: ${APP_AUTH_OTP_MAX_RESENDS:3}
+  academics:
+    ledger:
+      max-file-size-bytes: ${ACADEMIC_LEDGER_MAX_FILE_SIZE_BYTES:5242880}
+      retry-after-seconds: ${ACADEMIC_LEDGER_RETRY_AFTER_SECONDS:2}
+      processing:
+        worker-enabled: ${ACADEMIC_LEDGER_WORKER_ENABLED:true}
+        worker-poll-delay-ms: ${ACADEMIC_LEDGER_WORKER_POLL_DELAY_MS:2000}
+        staging-batch-size: ${ACADEMIC_LEDGER_STAGING_BATCH_SIZE:500}
+        max-uploads-per-poll: ${ACADEMIC_LEDGER_MAX_UPLOADS_PER_POLL:2}
+        stale-threshold: ${ACADEMIC_LEDGER_STALE_THRESHOLD:PT10M}
+    storage:
+      root: ${ACADEMIC_LEDGER_STORAGE_ROOT:./data/academic-ledger}
+    gpa:
+      # Centralized because the handbooks define the weighted formula but not the final tie-breaking mode.
+      # Override through ACADEMIC_GPA_ROUNDING_MODE if institutional policy requires a different mode.
+      rounding-mode: ${ACADEMIC_GPA_ROUNDING_MODE:HALF_UP}
+  cv:
+    preview-ttl: ${CV_PREVIEW_TTL:PT15M}
+    consumed-preview-retention: ${CV_CONSUMED_PREVIEW_RETENTION:PT24H}
+    cleanup:
+      poll-delay-ms: ${CV_CLEANUP_POLL_DELAY_MS:60000}
+      orphan-grace-period: ${CV_ORPHAN_GRACE_PERIOD:PT1H}
+    storage:
+      root: ${CV_STORAGE_ROOT:./data/cv}
+    latex:
+      command: ${CV_LATEX_COMMAND:xelatex}
+      timeout: ${CV_LATEX_TIMEOUT:PT10S}
+      max-output-bytes: ${CV_PDF_MAX_BYTES:5242880}
+      max-concurrent-generations: ${CV_PDF_MAX_CONCURRENT:2}
+  exports:
+    storage:
+      root: ${EXPORT_STORAGE_ROOT:./data/exports}
+    processing:
+      worker-enabled: ${EXPORT_WORKER_ENABLED:true}
+      worker-poll-delay-ms: ${EXPORT_WORKER_POLL_DELAY_MS:2000}
+      max-jobs-per-poll: ${EXPORT_MAX_JOBS_PER_POLL:2}
+      retention: ${EXPORT_RETENTION:P7D}
   security:
     jwt:
       issuer: ${JWT_ISSUER:cv-management}
@@ -58,4 +118,4 @@ app:
 logging:
   level:
     root: INFO
-    lk.ac.ruhuna.dcs.cvmanagement: INFO
+    lk.ac.ruhuna.dcs.cvmanagement: DEBUG

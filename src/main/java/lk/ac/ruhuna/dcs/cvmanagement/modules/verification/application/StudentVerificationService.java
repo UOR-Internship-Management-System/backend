@@ -15,6 +15,9 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.api.dto.response.OtpVe
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.api.dto.response.StudentVerificationResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.domain.policy.OtpPurpose;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventOutcome;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventSeverity;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.BadRequestException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ConflictException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
@@ -57,12 +60,15 @@ public class StudentVerificationService {
             throw new ConflictException("This student account has already been activated.");
         }
         OtpService.OtpCreateResult result = otpService.createSignUpContext(student.id(), indexNumber, email);
-        auditEventPublisher.record(
+        auditEventPublisher.recordSecurityBestEffort(
                 student.userAccountId(),
                 RoleName.STUDENT.name(),
-                "AUTH_STUDENT_VERIFICATION_STARTED",
+                AuditEventType.AUTH_STUDENT_VERIFICATION_STARTED,
+                AuditEventOutcome.ATTEMPTED,
+                AuditEventSeverity.INFO,
                 "eligible_student",
-                student.id().toString());
+                student.id().toString(),
+                java.util.Map.of("purpose", OtpPurpose.SIGN_UP.name()));
         return new StudentVerificationResponse(
                 result.contextId(),
                 "OTP_SENT",
@@ -128,12 +134,15 @@ public class StudentVerificationService {
             assignRole(userAccountId, RoleName.STUDENT);
         }
         otpService.consume(context.id());
-        auditEventPublisher.record(
+        auditEventPublisher.recordSecurityRequired(
                 userAccountId,
                 RoleName.STUDENT.name(),
-                "AUTH_STUDENT_PASSWORD_CREATED",
+                AuditEventType.AUTH_STUDENT_PASSWORD_CREATED,
+                AuditEventOutcome.SUCCEEDED,
+                AuditEventSeverity.INFO,
                 "user_account",
-                userAccountId.toString());
+                userAccountId.toString(),
+                java.util.Map.of("purpose", OtpPurpose.SIGN_UP.name()));
     }
 
     private Optional<EligibleStudent> findEligibleStudent(String indexNumber, String email) {

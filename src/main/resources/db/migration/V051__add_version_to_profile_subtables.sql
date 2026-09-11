@@ -1,0 +1,5 @@
+ALTER TABLE student_contact_links ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE student_certificates ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE student_awards ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE student_activities ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE student_work_experience ADD COLUMN version BIGINT NOT NULL DEFAULT 0;

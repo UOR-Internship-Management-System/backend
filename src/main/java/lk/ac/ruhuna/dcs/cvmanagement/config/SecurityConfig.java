@@ -5,6 +5,7 @@ import java.util.List;
 import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.jwt.JwtAuthenticationFilter;
 import lk.ac.ruhuna.dcs.cvmanagement.infrastructure.jwt.JwtProperties;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.domain.policy.OtpRateLimitPolicy;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.security.SecurityProblemResponseWriter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -41,22 +42,31 @@ public class SecurityConfig {
         "/openapi/**",
         "/v3/api-docs/**",
         "/swagger-ui/**",
-        "/swagger-ui.html"
+        "/swagger-ui.html",
+        "/api/v1/files/*/content",
     };
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter)
-            throws Exception {
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            SecurityProblemResponseWriter securityProblemResponseWriter) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) ->
+                                securityProblemResponseWriter.writeUnauthorized(request, response))
+                        .accessDeniedHandler((request, response, exception) ->
+                                securityProblemResponseWriter.writeForbidden(request, response)))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers("/api/v1/student/**").hasRole("STUDENT")
+                        .requestMatchers("/api/v1/me/**").hasRole("STUDENT") //Added by Sahan
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
@@ -81,8 +91,8 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(parseOrigins(allowedOrigins));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id"));
-        configuration.setExposedHeaders(List.of("X-Correlation-Id"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Correlation-Id", "X-Request-Id", "If-Match", "If-None-Match"));
+        configuration.setExposedHeaders(List.of("X-Correlation-Id", "Location", "ETag", "Retry-After", "Content-Disposition"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

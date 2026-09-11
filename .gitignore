@@ -26,3 +26,21 @@ replay_pid*
 
 target/
 .idea/
+
+# Local runtime file storage
+/data/
+
+# Local Postman/Newman acceptance secrets and reports
+postman/company-internship/*.local.postman_environment.json
+postman/company-internship/reports/
+postman/cv-generation/*.local.postman_environment.json
+postman/cv-generation/reports/
+postman/admin-student-inspection/*.local.postman_environment.json
+postman/admin-student-inspection/reports/
+postman/shortlist-management/*.local.postman_environment.json
+postman/shortlist-management/reports/
+postman/candidate-filtering/*.local.postman_environment.json
+postman/audit-system-events/*.local.postman_environment.json
+postman/candidate-filtering/reports/
+postman/candidate-filtering/*.local.postman_environment.json
+postman/candidate-filtering/reports/

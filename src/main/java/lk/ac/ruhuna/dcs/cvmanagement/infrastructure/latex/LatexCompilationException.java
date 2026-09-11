@@ -1,8 +1,12 @@
 package lk.ac.ruhuna.dcs.cvmanagement.infrastructure.latex;
 
-/**
- * Exception thrown when LaTeX compilation fails.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class LatexCompilationException {
+/** Internal generation failure. Compiler output and temporary paths must never cross the API boundary. */
+public class LatexCompilationException extends RuntimeException {
+    public LatexCompilationException(String message) {
+        super(message);
+    }
+
+    public LatexCompilationException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

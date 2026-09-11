@@ -21,8 +21,9 @@ ON CONFLICT DO NOTHING;
 
 INSERT INTO eligible_students (index_number, university_email, full_name, academic_level)
 VALUES
-    ('SC-2020-001', 'sc2020001@dcs.ruh.ac.lk', 'Nimal Perera', 3),
-    ('SC-2020-002', 'sc2020002@dcs.ruh.ac.lk', 'Ayesha Fernando', 3),
-    ('SC-2019-001', 'sc2019001@dcs.ruh.ac.lk', 'Kasun Silva', 4),
-    ('SC-2019-002', 'sc2019002@dcs.ruh.ac.lk', 'Hiruni Jayasinghe', 4)
+    ('SC/2021/12430', 'nimalp@usci.ruh.ac.lk', 'Nimal Perera', 4),
+    ('SC/2022/13120', 'ayeshaf@usci.ruh.ac.lk', 'Ayesha Fernando', 3),
+    ('SC/2022/12933', 'kasuns@usci.ruh.ac.lk', 'Kasun Silva', 3),
+    ('SC/2022/12888', 'basnayake12888@usci.ruh.ac.lk', 'Sahan Basnayake', 3),
+    ('SC/2021/12500', 'hirunij@usci.ruh.ac.lk', 'Hiruni Jayasinghe', 4)
 ON CONFLICT (index_number) DO NOTHING;

@@ -1,8 +1,13 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.cv.api.dto.response;
 
-/**
- * Reserved API response DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class CvPreviewResponse {
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+public record CvPreviewResponse(
+    UUID previewId,
+    String htmlPreview,
+    CvFreshnessResponse freshness,
+    CvPreviewConfigurationResponse configuration,
+    OffsetDateTime generatedAt,
+    OffsetDateTime expiresAt) {
 }

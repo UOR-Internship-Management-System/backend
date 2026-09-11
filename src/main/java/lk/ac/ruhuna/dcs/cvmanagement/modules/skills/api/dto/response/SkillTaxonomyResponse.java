@@ -1,8 +1,6 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.skills.api.dto.response;
 
-/**
- * Reserved API response DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class SkillTaxonomyResponse {
+import java.util.List;
+
+public record SkillTaxonomyResponse(List<SkillClusterResponse> clusters) {
 }

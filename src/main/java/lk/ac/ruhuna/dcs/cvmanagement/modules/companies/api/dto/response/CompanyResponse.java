@@ -1,8 +1,18 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.companies.api.dto.response;
 
-/**
- * Reserved API response DTO boundary for its approved module operations.
- * <p>Activated only in the sprint that implements the approved behavior.
- */
-public class CompanyResponse {
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+/** Public Company metadata response defined by OpenAPI v1.6.0. */
+public record CompanyResponse(
+        UUID companyId,
+        String name,
+        String websiteUrl,
+        String contactPerson,
+        String contactEmail,
+        String contactPhone,
+        String notes,
+        long version,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt) {
 }

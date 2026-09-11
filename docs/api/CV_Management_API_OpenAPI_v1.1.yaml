@@ -2,7 +2,7 @@ openapi: 3.1.1
 info:
   title: CV Management and Deterministic Internship Candidate Filtering API
   version: 1.1.0
-  description: REST/JSON API contract for the locked Version 1 scope, revised for Sprint 2 Complete 
+  description: REST/JSON API contract for the locked Version 1 scope, revised for Sprint 2 Complete
     Authentication for Student and predefined Department Admin accounts.
   x-revision-summary:
     - Expanded Sprint 2 authentication to predefined Department Admin accounts.
@@ -1376,7 +1376,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceResponse'
+                $ref: '#/components/schemas/WorkExperienceResponse'
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -1405,7 +1405,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExperienceRequest'
+              $ref: '#/components/schemas/WorkExperienceRequest'
   /me/profile/experience/{experienceId}:
     patch:
       tags:
@@ -1418,7 +1418,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperienceResponse'
+                $ref: '#/components/schemas/WorkExperienceResponse'
         '400':
           $ref: '#/components/responses/Error400'
         '401':
@@ -1455,7 +1455,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ExperienceRequest'
+              $ref: '#/components/schemas/WorkExperienceRequest'
     delete:
       tags:
         - Student Profile
@@ -4424,39 +4424,24 @@ components:
             type: object
     ActivityRequest:
       type: object
+      required: [ activityName ]
       properties:
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        activityName: { type: string, maxLength: 200 }
+        roleTitle: { type: string, maxLength: 150 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        description: { type: string }
+        cvInclude: { type: boolean }
     ActivityResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        type: object
+        properties:
+          id: { type: string, format: uuid }
+          activityName: { type: string }
+          roleTitle: { type: string }
+          startDate: { type: string, format: date }
+          endDate: { type: string, format: date }
+          description: { type: string }
+          cvInclude: { type: boolean }
     AdminDashboardMetricsResponse:
       type: object
       properties:
@@ -4513,39 +4498,22 @@ components:
           $ref: '#/components/schemas/CurrentUserResponse'
     AwardRequest:
       type: object
+      required: [ title ]
       properties:
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        title: { type: string, maxLength: 200 }
+        issuer: { type: string, maxLength: 200 }
+        awardDate: { type: string, format: date }
+        description: { type: string }
+        cvInclude: { type: boolean }
     AwardResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        type: object
+        properties:
+          id: { type: string, format: uuid }
+          title: { type: string }
+          issuer: { type: string }
+          awardDate: { type: string, format: date }
+          description: { type: string }
+          cvInclude: { type: boolean }
     CandidateFilteringRunRequest:
       type: object
       required:
@@ -4596,39 +4564,22 @@ components:
           format: date-time
     CertificateRequest:
       type: object
+      required: [ title ]
       properties:
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        title: { type: string, maxLength: 200 }
+        issuer: { type: string, maxLength: 200 }
+        issueDate: { type: string, format: date }
+        credentialUrl: { type: string, format: uri }
+        cvInclude: { type: boolean }
     CertificateResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        type: object
+        properties:
+          id: { type: string, format: uuid }
+          title: { type: string }
+          issuer: { type: string }
+          issueDate: { type: string, format: date }
+          credentialUrl: { type: string, format: uri }
+          cvInclude: { type: boolean }
     CompanyRequest:
       type: object
       required:
@@ -4664,39 +4615,20 @@ components:
           type: string
     ContactLinkRequest:
       type: object
+      required: [ label, url ]
       properties:
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        label: { type: string, maxLength: 60 }
+        url: { type: string, format: uri }
+        displayOrder: { type: integer }
+        cvInclude: { type: boolean }
     ContactLinkResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        type: object
+        properties:
+          id: { type: string, format: uuid }
+          label: { type: string }
+          url: { type: string, format: uri }
+          displayOrder: { type: integer }
+          cvInclude: { type: boolean }
     CurrentUserResponse:
       type: object
       additionalProperties: false
@@ -4830,41 +4762,26 @@ components:
             - BEGINNER
             - INTERMEDIATE
             - ADVANCED
-    ExperienceRequest:
+    WorkExperienceRequest:
       type: object
+      required: [ organization ]
       properties:
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
-    ExperienceResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        title:
-          type: string
-        description:
-          type: string
-        url:
-          type: string
-          format: uri
-        startDate:
-          type: string
-          format: date
-        endDate:
-          type: string
-          format: date
+        organization: { type: string, maxLength: 200 }
+        positionTitle: { type: string, maxLength: 150 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        description: { type: string }
+        cvInclude: { type: boolean }
+    WorkExperienceResponse:
+        type: object
+        properties:
+          id: { type: string, format: uuid }
+          organization: { type: string }
+          positionTitle: { type: string }
+          startDate: { type: string, format: date }
+          endDate: { type: string, format: date }
+          description: { type: string }
+          cvInclude: { type: boolean }
     ExportCreateRequest:
       type: object
       properties:
@@ -5305,7 +5222,7 @@ components:
         resetId:
           type: string
           format: uuid
-          description: Opaque reset-flow identifier returned for every syntactically valid request. Its 
+          description: Opaque reset-flow identifier returned for every syntactically valid request. Its
             presence does not confirm that an eligible account exists.
         message:
           type: string

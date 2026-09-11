@@ -1,5 +1,7 @@
-# CV Templates
+# ATS CV template
 
-Backend-controlled ATS-compliant CV generation is approved for Version 1 but is not implemented in Sprint 1.
+`ATS-TEMPLATE-V1` is backend-controlled and single-column. `LatexCvRenderer` owns all dynamic
+content and escaping. Raw LaTeX is never accepted from or returned to clients.
 
-This directory is reserved for the later CV generation sprint. Templates must not introduce CV submission, admin review, approval, rejection, or correction workflows.
+The runtime compiler is XeLaTeX with shell escape disabled. Keep required packages minimal and do
+not add parser-hostile graphical layout, charts, columns, or image-based text.

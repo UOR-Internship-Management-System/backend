@@ -657,6 +657,10 @@ Add tests for behavior changes, keep OpenAPI copies synchronized, and preserve t
 
 ## Security
 
+- `docs/api/CV_Management_API_OpenAPI_v1.6.0.yaml`
+- `src/main/resources/openapi/CV_Management_API_OpenAPI_v1.6.0.yaml`
+
+Older versioned contract files are retained only as historical artifacts.
 Do not disclose suspected vulnerabilities in a public issue. Follow [`SECURITY.md`](SECURITY.md).
 
 Never commit database/SMTP credentials, JWT secrets, `.env` files, OTPs, tokens, password hashes, student data, generated CVs, ledger uploads, or exports.

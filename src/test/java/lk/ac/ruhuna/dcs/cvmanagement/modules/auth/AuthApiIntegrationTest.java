@@ -212,7 +212,7 @@ class AuthApiIntegrationTest {
                         .content("""
                                 {
                                   "fullName":"Display Name",
-                                  "indexNumber":"SC-2020-001",
+                                  "indexNumber":"SC/2020/00001",
                                   "universityEmail":"sc2020001@dcs.ruh.ac.lk"
                                 }
                                 """))

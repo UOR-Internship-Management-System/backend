@@ -1,6 +1,7 @@
 package lk.ac.ruhuna.dcs.cvmanagement.modules.auth.application;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.api.dto.request.PasswordCreateRequest;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.api.dto.request.PasswordResetStartRequest;
@@ -10,6 +11,9 @@ import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.api.dto.response.Passw
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.application.OtpService;
 import lk.ac.ruhuna.dcs.cvmanagement.modules.verification.domain.policy.OtpPurpose;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventPublisher;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventOutcome;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventSeverity;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.audit.AuditEventType;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.BadRequestException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,21 +44,27 @@ public class PasswordResetService {
                 .map(account -> {
                     OtpService.OtpCreateResult result =
                             otpService.createResetContext(account.id(), request.accountType(), email);
-                    auditEventPublisher.record(
+                    auditEventPublisher.recordSecurityRequired(
                             account.id(),
                             request.accountType().name(),
-                            "AUTH_PASSWORD_RESET_STARTED",
+                            AuditEventType.AUTH_PASSWORD_RESET_STARTED,
+                            AuditEventOutcome.ATTEMPTED,
+                            AuditEventSeverity.INFO,
                             "user_account",
-                            account.id().toString());
+                            account.id().toString(),
+                            Map.of("accountType", request.accountType().name()));
                     return new PasswordResetResponse(result.contextId(), SAFE_RESET_MESSAGE, result.ttl().toSeconds());
                 })
                 .orElseGet(() -> {
-                    auditEventPublisher.record(
+                    auditEventPublisher.recordSecurityBestEffort(
                             null,
                             request.accountType().name(),
-                            "AUTH_PASSWORD_RESET_REQUEST_NON_ELIGIBLE",
+                            AuditEventType.AUTH_PASSWORD_RESET_REQUEST_INELIGIBLE,
+                            AuditEventOutcome.DENIED,
+                            AuditEventSeverity.WARN,
                             "user_account",
-                            null);
+                            null,
+                            Map.of("accountType", request.accountType().name()));
                     return new PasswordResetResponse(UUID.randomUUID(), SAFE_RESET_MESSAGE, otpService.expiresInSeconds());
                 });
     }
@@ -81,11 +91,14 @@ public class PasswordResetService {
                 .orElseThrow(() -> new BadRequestException("Password reset context is invalid."));
         authService.updatePassword(account.id(), request.newPassword());
         otpService.consume(context.id());
-        auditEventPublisher.record(
+        auditEventPublisher.recordSecurityRequired(
                 account.id(),
                 context.accountType().name(),
-                "AUTH_PASSWORD_RESET_COMPLETED",
+                AuditEventType.AUTH_PASSWORD_RESET_COMPLETED,
+                AuditEventOutcome.SUCCEEDED,
+                AuditEventSeverity.INFO,
                 "user_account",
-                account.id().toString());
+                account.id().toString(),
+                Map.of("accountType", context.accountType().name()));
     }
 }
