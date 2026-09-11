@@ -40,6 +40,7 @@ import lk.ac.ruhuna.dcs.cvmanagement.shared.api.dto.FileAssetResponse;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ForbiddenException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.NotFoundException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.error.PreconditionFailedException;
+import lk.ac.ruhuna.dcs.cvmanagement.shared.error.ValidationException;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.files.ProfileFileService;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.PageRequestFactory;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.pagination.dto.PagedResponse;
@@ -127,15 +128,18 @@ public class StudentProfileService {
 
     @Transactional
     public StudentProfileResponse updateMyProfile(StudentProfileUpdateRequest request) {
+        if (request == null || !request.hasAnyField()) {
+            throw new ValidationException("Change at least one profile field.");
+        }
         StudentEntity student = currentStudent();
         StudentProfileEntity profile = getOrCreateProfile(student.getId());
 
-        if (request.fullName() != null) profile.setDisplayName(request.fullName());
-        if (request.personalEmail() != null) profile.setPersonalEmail(request.personalEmail());
-        if (request.headline() != null) profile.setHeadline(request.headline());
-        if (request.summary() != null) profile.setSummary(request.summary());
-        if (request.phone() != null) profile.setPhone(request.phone());
-        if (request.location() != null) profile.setLocation(request.location());
+        if (request.hasFullName()) profile.setDisplayName(request.fullName());
+        if (request.hasPersonalEmail()) profile.setPersonalEmail(request.personalEmail());
+        if (request.hasHeadline()) profile.setHeadline(request.headline());
+        if (request.hasSummary()) profile.setSummary(request.summary());
+        if (request.hasPhone()) profile.setPhone(request.phone());
+        if (request.hasLocation()) profile.setLocation(request.location());
         profile.setUpdatedAt(OffsetDateTime.now());
 
         StudentProfileEntity saved = studentProfileRepository.save(profile);
