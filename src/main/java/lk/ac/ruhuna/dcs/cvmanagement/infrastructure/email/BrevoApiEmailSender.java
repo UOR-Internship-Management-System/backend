@@ -27,11 +27,10 @@ public class BrevoApiEmailSender implements EmailSender {
     private final String fromAddress;
 
     public BrevoApiEmailSender(
-        RestClient.Builder restClientBuilder,
         @Value("${app.email.from}") String fromAddress,
         @Value("${app.email.brevo-api-key}") String apiKey) {
         this.fromAddress = fromAddress;
-        this.restClient = restClientBuilder
+        this.restClient = RestClient.builder()
             .baseUrl(BREVO_ENDPOINT)
             .defaultHeader("api-key", apiKey)
             .defaultHeader("accept", "application/json")
