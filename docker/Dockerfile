@@ -21,16 +21,18 @@ RUN apt-get update \
         texlive-latex-base \
         fonts-lmodern \
         fonts-liberation \
+        gosu \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system appgroup \
     && useradd --system --gid appgroup --home-dir /app --shell /usr/sbin/nologin appuser
 
 WORKDIR /app
 COPY --from=build /workspace/target/app.jar app.jar
+COPY docker/entrypoint.sh /app/entrypoint.sh
 
 RUN mkdir -p /app/data/cv /app/data/academic-ledger \
-    && chown -R appuser:appgroup /app
+    && chown -R appuser:appgroup /app \
+    && chmod +x /app/entrypoint.sh
 
-USER appuser
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/app/entrypoint.sh"]
