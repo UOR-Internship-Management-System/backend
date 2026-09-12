@@ -30,8 +30,10 @@ LICENSE
 # CI/CD
 .github/
 
-# Docker files themselves
-docker/
+# Docker files themselves (entrypoint.sh is needed in the build context by the Dockerfile's COPY)
+docker/docker-compose*.yml
+docker/README.md
+docker/postgres/
 Dockerfile
 
 # Agents config
