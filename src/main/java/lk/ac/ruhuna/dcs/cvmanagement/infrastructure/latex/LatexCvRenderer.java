@@ -116,9 +116,13 @@ public class LatexCvRenderer {
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
             spacer(out, i);
+            boolean hasResultNote = hasText(item.resultNote());
             entryBlock(out, item.degree(), item.institution(),
-                    formatYearRange(item.startDate(), item.endDate(), item.current()), null);
-            metaRow(out, item.resultNote(), item.location());
+                    formatYearRange(item.startDate(), item.endDate(), item.current()),
+                    hasResultNote ? null : item.location());
+            if (hasResultNote) {
+                metaRow(out, item.resultNote(), item.location());
+            }
         }
     }
 
