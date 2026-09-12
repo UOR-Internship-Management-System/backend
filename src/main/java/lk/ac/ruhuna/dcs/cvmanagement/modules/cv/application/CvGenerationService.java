@@ -46,8 +46,7 @@ public class CvGenerationService {
             });
         } catch (LatexCompilationException exception) {
             generationFailureCounter.increment();
-            //LOGGER.warn("CV PDF generation failed.");
-            LOGGER.warn("CV PDF generation failed: {}", exception.getMessage());
+            LOGGER.warn("CV PDF generation failed: {}", exception.getMessage(), exception);
             throw new CvGenerationFailedException();
         }
     }
