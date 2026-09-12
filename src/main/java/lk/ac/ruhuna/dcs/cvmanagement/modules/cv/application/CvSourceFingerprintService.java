@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 public class CvSourceFingerprintService {
 
     static final String FINGERPRINT_VERSION = "CV-SOURCE-V1";
-    static final String TEMPLATE_VERSION = "ATS-TEMPLATE-V1";
+    static final String TEMPLATE_VERSION = "ATS-TEMPLATE-V2";
 
     public String fingerprint(CvDocumentModel model) {
         MessageDigest digest = sha256();

@@ -13,9 +13,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class LatexCvRenderer {
 
-    public static final String TEMPLATE_VERSION = "ATS-TEMPLATE-V1";
+    public static final String TEMPLATE_VERSION = "ATS-TEMPLATE-V2";
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("MMM uuuu", Locale.ENGLISH);
     private static final DateTimeFormatter YEAR = DateTimeFormatter.ofPattern("uuuu", Locale.ENGLISH);
+    private static final String SEPARATOR = " \\textbullet{} ";
 
     public String render(CvDocumentModel model) {
         StringBuilder body = new StringBuilder(4096);
@@ -32,52 +33,62 @@ public class LatexCvRenderer {
 
         return """
                 \\documentclass[10pt,a4paper]{article}
-                \\usepackage[margin=1.55cm]{geometry}
+                \\usepackage[left=1.6cm,right=1.6cm,top=1.35cm,bottom=1.35cm]{geometry}
                 \\usepackage{fontspec}
                 \\usepackage{color}
                 \\IfFontExistsTF{Liberation Sans}{\\setmainfont{Liberation Sans}}{}
-                \\definecolor{cvaccent}{rgb}{0.11,0.22,0.37}
+                \\definecolor{cvink}{rgb}{0.10,0.11,0.13}
+                \\definecolor{cvmuted}{rgb}{0.32,0.34,0.39}
                 \\setlength{\\parindent}{0pt}
-                \\setlength{\\parskip}{4pt}
-                \\linespread{1.05}
+                \\setlength{\\parskip}{3.5pt}
+                \\linespread{1.08}
                 \\pagestyle{empty}
                 \\makeatletter
-                \\renewcommand{\\@listI}{\\leftmargin\\leftmargini\\itemsep 1.5pt\\parsep 0pt\\topsep 2pt\\partopsep 0pt}
+                \\renewcommand{\\@listI}{\\leftmargin\\leftmargini\\itemsep 2pt\\parsep 0pt\\topsep 3pt\\partopsep 0pt}
                 \\let\\@listi\\@listI
                 \\makeatother
-                \\newcommand{\\cvsection}[1]{\\vspace{9pt}{\\color{cvaccent}\\bfseries\\large\\MakeUppercase{#1}}\\par\\vspace{1pt}{\\color{cvaccent}\\hrule height 0.8pt}\\vspace{5pt}}
-                \\newcommand{\\cvspacer}{\\vspace{7pt}}
+                \\newcommand{\\cvsection}[1]{\\vspace{12pt}{\\color{cvink}\\bfseries\\large\\MakeUppercase{#1}}\\par\\vspace{2.5pt}{\\color{cvink}\\hrule height 0.7pt}\\vspace{6pt}}
+                \\newcommand{\\cvspacer}{\\vspace{8pt}}
                 \\begin{document}
                 %s
                 \\end{document}
                 """.formatted(body);
     }
 
+    /**
+     * Centered masthead: name, headline, then contact details grouped into aligned rows
+     * (addresses and phone, then profile links, then location).
+     */
     private void renderHeader(StringBuilder out, CvDocumentModel model) {
         String name = firstNonBlank(
                 model.profile() == null ? null : model.profile().displayName(),
                 model.identity().fullName());
         out.append("\\begin{center}\n");
-        out.append("{\\Huge\\bfseries ").append(escape(name)).append("}\\par\n");
+        out.append("{\\Huge\\bfseries\\color{cvink} ").append(escape(name)).append("}\\par\n");
         if (model.profile() != null && hasText(model.profile().headline())) {
-            out.append("\\vspace{1pt}{\\large ").append(escape(model.profile().headline())).append("}\\par\n");
+            out.append("\\vspace{4pt}{\\large\\color{cvmuted} ")
+                    .append(escape(model.profile().headline()))
+                    .append("}\\par\n");
         }
-        out.append("\\vspace{4pt}\n");
-        String contactLine = joinNonBlank(" | ",
+        out.append("\\vspace{7pt}\n");
+
+        contactRow(out, joinEscaped(
                 model.identity().universityEmail(),
                 model.profile() == null ? null : model.profile().personalEmail(),
-                model.profile() == null ? null : model.profile().phone());
-        String links = model.contactLinks().stream()
-                .map(link -> joinNonBlank(": ", link.label(), link.url()))
+                model.profile() == null ? null : model.profile().phone()));
+
+        contactRow(out, model.contactLinks().stream()
+                .map(this::formatContactLink)
                 .filter(this::hasText)
-                .reduce((a, b) -> a + " | " + b)
-                .orElse("");
-        String contactRow = joinNonBlank(" | ", contactLine, links);
-        if (hasText(contactRow)) out.append("{\\small ").append(escape(contactRow)).append("}\\par\n");
+                .map(this::escape)
+                .reduce((a, b) -> a + SEPARATOR + b)
+                .orElse(""));
+
         String location = model.profile() == null ? null : model.profile().location();
-        if (hasText(location)) out.append("\\vspace{1pt}{\\small ").append(escape(location)).append("}\\par\n");
+        if (hasText(location)) contactRow(out, escape(location));
+
         out.append("\\end{center}\n");
-        out.append("\\vspace{2pt}{\\color{cvaccent}\\hrule height 1pt}\\vspace{3pt}\n");
+        out.append("\\vspace{3pt}{\\color{cvink}\\hrule height 0.9pt}\n");
     }
 
     private void renderSummary(StringBuilder out, CvDocumentModel.Profile profile) {
@@ -105,7 +116,7 @@ public class LatexCvRenderer {
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
             spacer(out, i);
-            entryBlock(out, joinNonBlank(", ", item.degree(), item.institution()),
+            entryBlock(out, item.degree(), item.institution(),
                     formatYearRange(item.startDate(), item.endDate(), item.current()), null);
             metaRow(out, item.resultNote(), item.location());
         }
@@ -117,7 +128,7 @@ public class LatexCvRenderer {
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
             spacer(out, i);
-            entryBlock(out, joinNonBlank(" — ", item.positionTitle(), item.organization()),
+            entryBlock(out, item.positionTitle(), item.organization(),
                     formatRange(item.startDate(), item.endDate(), item.currentRole()), item.location());
             renderDescription(out, item.description());
         }
@@ -129,7 +140,7 @@ public class LatexCvRenderer {
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
             spacer(out, i);
-            entryBlock(out, item.title(), formatRange(item.startDate(), item.endDate(), false), null);
+            entryBlock(out, item.title(), null, formatRange(item.startDate(), item.endDate(), false), null);
             renderDescription(out, item.description());
             String skills = item.skills().stream()
                     .map(CvDocumentModel.ProjectSkill::skillName)
@@ -137,7 +148,7 @@ public class LatexCvRenderer {
                     .reduce((a, b) -> a + ", " + b)
                     .orElse("");
             labeledLine(out, "Technologies", skills);
-            appendLine(out, joinNonBlank(" | ", item.repositoryUrl(), item.demoUrl()));
+            appendLine(out, joinNonBlank(" \u2022 ", cleanUrl(item.repositoryUrl()), cleanUrl(item.demoUrl())));
         }
     }
 
@@ -147,8 +158,8 @@ public class LatexCvRenderer {
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
             spacer(out, i);
-            entryBlock(out, joinNonBlank(" — ", item.title(), item.issuer()), formatDate(item.issueDate()), null);
-            appendLine(out, item.credentialUrl());
+            entryBlock(out, item.title(), item.issuer(), formatDate(item.issueDate()), null);
+            appendLine(out, cleanUrl(item.credentialUrl()));
         }
     }
 
@@ -158,7 +169,7 @@ public class LatexCvRenderer {
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
             spacer(out, i);
-            entryBlock(out, joinNonBlank(" — ", item.title(), item.issuer()), formatDate(item.awardDate()), null);
+            entryBlock(out, item.title(), item.issuer(), formatDate(item.awardDate()), null);
             renderDescription(out, item.description());
         }
     }
@@ -169,7 +180,7 @@ public class LatexCvRenderer {
         for (int i = 0; i < items.size(); i++) {
             var item = items.get(i);
             spacer(out, i);
-            entryBlock(out, joinNonBlank(" — ", item.activityName(), item.roleTitle()),
+            entryBlock(out, item.activityName(), item.roleTitle(),
                     formatRange(item.startDate(), item.endDate(), item.endDate() == null && item.startDate() != null),
                     null);
             renderDescription(out, item.description());
@@ -191,17 +202,31 @@ public class LatexCvRenderer {
         out.append("\\cvsection{").append(escape(title)).append("}\n");
     }
 
+    /** Renders one centered header line of already-escaped contact text. */
+    private void contactRow(StringBuilder out, String escapedContent) {
+        if (!hasText(escapedContent)) return;
+        out.append("\\vspace{2pt}{\\small\\color{cvmuted} ").append(escapedContent).append("}\\par\n");
+    }
+
     /**
-     * Renders a bold title with the date right-aligned on the same line, followed by an optional
-     * italic meta line (e.g. location) grouped into the same paragraph so it stays visually tied
-     * to the title instead of drifting apart by a full paragraph gap.
+     * Renders a bold title with an optional italic subtitle (institution, employer, issuer) beside it
+     * and the date right-aligned on the same line, followed by an optional italic meta line grouped
+     * into the same paragraph so it stays visually tied to the title.
      */
-    private void entryBlock(StringBuilder out, String title, String date, String meta) {
-        if (!hasText(title) && !hasText(date) && !hasText(meta)) return;
+    private void entryBlock(StringBuilder out, String title, String subtitle, String date, String meta) {
+        if (!hasText(title) && !hasText(subtitle) && !hasText(date) && !hasText(meta)) return;
         out.append("\\noindent");
-        if (hasText(title)) out.append("{\\bfseries ").append(escape(title)).append("}");
-        if (hasText(date)) out.append("\\hfill{\\itshape ").append(escape(date)).append("}");
-        if (hasText(meta)) out.append("\\\\{\\itshape ").append(escape(meta)).append("}");
+        if (hasText(title)) {
+            out.append("{\\bfseries\\color{cvink} ").append(escape(title));
+            if (hasText(subtitle)) out.append(",");
+            out.append("}");
+        }
+        if (hasText(subtitle)) {
+            if (hasText(title)) out.append(" ");
+            out.append("{\\itshape ").append(escape(subtitle)).append("}");
+        }
+        if (hasText(date)) out.append("\\hfill{\\itshape\\color{cvmuted} ").append(escape(date)).append("}");
+        if (hasText(meta)) out.append("\\\\{\\itshape\\color{cvmuted} ").append(escape(meta)).append("}");
         out.append("\\par\n");
     }
 
@@ -210,7 +235,7 @@ public class LatexCvRenderer {
         if (!hasText(left) && !hasText(right)) return;
         out.append("\\noindent{}");
         if (hasText(left)) out.append(escape(left));
-        if (hasText(right)) out.append("\\hfill{\\itshape ").append(escape(right)).append("}");
+        if (hasText(right)) out.append("\\hfill{\\itshape\\color{cvmuted} ").append(escape(right)).append("}");
         out.append("\\par\n");
     }
 
@@ -240,7 +265,7 @@ public class LatexCvRenderer {
             appendLine(out, lines.get(0));
             return;
         }
-        out.append("\\begin{itemize}\\setlength{\\itemsep}{1pt}\\setlength{\\parskip}{0pt}\\setlength{\\topsep}{2pt}\n");
+        out.append("\\begin{itemize}\\setlength{\\itemsep}{2pt}\\setlength{\\parskip}{0pt}\\setlength{\\topsep}{3pt}\n");
         for (String line : lines) {
             out.append("\\item ").append(escape(line)).append("\n");
         }
@@ -254,6 +279,26 @@ public class LatexCvRenderer {
         }
         if (trimmed.startsWith("\u2022")) return trimmed.substring(1).strip();
         return trimmed;
+    }
+
+    /** Builds one contact link as "Label: host/path", dropping the scheme and www noise. */
+    private String formatContactLink(CvDocumentModel.ContactLink link) {
+        String url = cleanUrl(link.url());
+        if (!hasText(url)) return hasText(link.label()) ? link.label().strip() : "";
+        if (!hasText(link.label())) return url;
+        return link.label().strip() + ": " + url;
+    }
+
+    /** Strips scheme, www prefix, and trailing slashes so links stay readable on one header line. */
+    private String cleanUrl(String url) {
+        if (!hasText(url)) return "";
+        String value = url.strip();
+        String lower = value.toLowerCase(Locale.ENGLISH);
+        if (lower.startsWith("https://")) value = value.substring(8);
+        else if (lower.startsWith("http://")) value = value.substring(7);
+        if (value.toLowerCase(Locale.ENGLISH).startsWith("www.")) value = value.substring(4);
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        return value;
     }
 
     private String formatYearRange(LocalDate start, LocalDate end, boolean current) {
@@ -287,7 +332,16 @@ public class LatexCvRenderer {
     }
 
     private String joinNonBlank(String delimiter, String... values) {
-        return java.util.Arrays.stream(values).filter(this::hasText).reduce((a,b) -> a + delimiter + b).orElse("");
+        return Arrays.stream(values).filter(this::hasText).reduce((a, b) -> a + delimiter + b).orElse("");
+    }
+
+    /** Escapes each value independently, then joins with the raw LaTeX header separator. */
+    private String joinEscaped(String... values) {
+        return Arrays.stream(values)
+                .filter(this::hasText)
+                .map(this::escape)
+                .reduce((a, b) -> a + SEPARATOR + b)
+                .orElse("");
     }
 
     private boolean hasText(String value) {
