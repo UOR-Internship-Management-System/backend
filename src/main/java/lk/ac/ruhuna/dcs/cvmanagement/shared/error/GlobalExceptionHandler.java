@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lk.ac.ruhuna.dcs.cvmanagement.shared.http.CorrelationIdContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String INVALID_VALUE = "INVALID_VALUE";
 
     private final ProblemDetailsFactory problemDetailsFactory;
@@ -137,6 +140,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiErrorResponse> handleUnexpected(Exception exception, HttpServletRequest request) {
+        LOGGER.error(
+                "Unhandled exception for {} {} correlationId={}",
+                request.getMethod(),
+                request.getRequestURI(),
+                CorrelationIdContext.current().orElse("unknown"),
+                exception);
         return build(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 ApiErrorCode.INTERNAL_ERROR,
