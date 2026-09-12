@@ -297,7 +297,11 @@ public class StudentProfileService {
             result.getContent().stream().map(CertificateEntity::getEvidenceFileId).toList());
 
         return PagedResponse.of(
-            result.map(entity -> mapper.toResponse(entity, evidence.get(entity.getEvidenceFileId()))),
+            result.map(entity -> {
+                UUID evidenceFileId = entity.getEvidenceFileId();
+                FileAssetResponse evidenceResponse = evidenceFileId == null ? null : evidence.get(evidenceFileId);
+                return mapper.toResponse(entity, evidenceResponse);
+            }),
             PageRequestFactory.describeSort(sort));
     }
 
